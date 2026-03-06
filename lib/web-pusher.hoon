@@ -96,25 +96,12 @@
     |=  old-state=vase
     ^-  (quip card:agent:gall agent:gall)
     =/  old=(unit [%web-pusher pusher-state vase])
-      ((soft ,[%web-pusher pusher-state vase]) q.old-state)
+      %-  mole  |.
+      !<([%web-pusher pusher-state vase] old-state)
     ?~  old
-      ::  state doesn't match current schema -- reset pusher state
+      ::  state doesn't match current schema -- reinitialize
       ::
-      =.  config.pstate
-        (some (generate-vapid-keypair:web-push eny.bowl sub-id))
-      =/  inner=vase
-        ::  try unwrapping old wrapper format
-        ::
-        ?.  ?=([%web-pusher ^] q.old-state)
-          old-state
-        =/  [%web-pusher * inner=vase]
-          !<([%web-pusher * vase] old-state)
-        inner
-      =^  cards  agent  (on-load:ag inner)
-      :_  this
-      :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
-          cards
-      ==
+      on-init
     =/  [%web-pusher ps=pusher-state inner=vase]  u.old
     =.  pstate  ps
     =^  cards  agent  (on-load:ag inner)
@@ -127,8 +114,7 @@
     |=  [=mark =vase]
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=(%push-send mark)
-      ?.  =(our src):bowl
-        ~|(%push-send-permission-denied !!)
+      ?>  =(our src):bowl
       =/  [ships=(set @p) msg=push-message]
         !<([(set @p) push-message] vase)
       =^  cards  pstate  (send-to-ships:hep ships msg)
