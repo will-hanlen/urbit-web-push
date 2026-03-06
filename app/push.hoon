@@ -19,51 +19,6 @@
 =|  state-0
 =*  state  -
 ::
-=/  sw-js=octs
-  %-  as-octs:mimes:html
-  '''
-  self.addEventListener("install", function(event) {
-    self.skipWaiting();
-  });
-  self.addEventListener("activate", function(event) {
-    event.waitUntil(self.clients.claim());
-  });
-  self.addEventListener("push", function(event) {
-    var data = {title: "Notification", body: ""};
-    try { data = event.data.json(); } catch(e) {}
-    var tag = data.tag || "";
-    event.waitUntil(
-      (tag ? self.registration.getNotifications() : Promise.resolve([]))
-      .then(function(all) {
-        var count = 1;
-        for (var i = 0; i < all.length; i++) {
-          if (all[i].tag && all[i].tag.indexOf(tag + "-") === 0) {
-            var c = all[i].data && all[i].data.count;
-            if (c) count = c + 1;
-            all[i].close();
-          }
-        }
-        var title = data.title;
-        var body = data.body || "";
-        if (count > 1) {
-          body = count + " new";
-        }
-        return self.registration.showNotification(title, {
-          body: body,
-          icon: data.icon || "",
-          tag: tag + "-" + Date.now(),
-          data: {url: data.url || "", count: count}
-        });
-      })
-    );
-  });
-  self.addEventListener("notificationclick", function(event) {
-    event.notification.close();
-    if (event.notification.data && event.notification.data.url) {
-      event.waitUntil(clients.openWindow(event.notification.data.url));
-    }
-  });
-  '''
 %+  verb  |
 %-  %:  agent:web-pusher
       /apps/push
@@ -102,9 +57,6 @@
   ?:  &(=('GET' meth) =(site /apps/push))
     %+  give-simple-payload:app:server  eyre-id
     (html-response:gen:server page-html)
-  ?:  &(=('GET' meth) =(site /apps/push/sw))
-    %+  give-simple-payload:app:server  eyre-id
-    (js-response:gen:server sw-js)
   ?:  &(=('GET' meth) =(site /apps/push/state))
     (get-state eyre-id)
   ?:  &(=('POST' meth) =(site /apps/push/send))
@@ -378,7 +330,7 @@
         return;
       }
       try {
-        swReg = await navigator.serviceWorker.register("/apps/push/sw.js");
+        swReg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
         log("Service worker registered");
         var sub = await swReg.pushManager.getSubscription();
         if (sub) {

@@ -25,6 +25,7 @@
 ::
 ::  The wrapper intercepts HTTP requests under {base}/~web-pusher:
 ::
+::    GET  {base}/~web-pusher/sw.js       -- default service worker (public)
 ::    GET  {base}/~web-pusher/vapid-key   -- VAPID public key
 ::    POST {base}/~web-pusher/subscribe   -- add subscription
 ::    POST {base}/~web-pusher/unsubscribe -- remove subscription
@@ -40,6 +41,19 @@
 ::
 ::    /unsubscribe:
 ::      { "id": "b-1709654321" }
+::
+::  The sw.js endpoint is served without authentication so browsers
+::  can register it as a service worker from any scope.
+::
+::  To use the default service worker from your inner agent's JS:
+::
+::    navigator.serviceWorker.register("{base}/~web-pusher/sw.js")
+::
+::  The default worker handles push events by parsing the payload
+::  as JSON with fields: title, body, icon, url, tag.  It collapses
+::  notifications with the same tag and opens the url on click.
+::
+::  If you need custom behavior, serve your own worker instead.
 ::
 ::  All other HTTP requests pass through to the inner agent.
 ::
@@ -65,6 +79,51 @@
 /-  push
 /+  web-push, server
 =,  push
+=/  default-sw-js=octs
+  %-  as-octs:mimes:html
+  '''
+  self.addEventListener("install", function(event) {
+    self.skipWaiting();
+  });
+  self.addEventListener("activate", function(event) {
+    event.waitUntil(self.clients.claim());
+  });
+  self.addEventListener("push", function(event) {
+    var data = {title: "Notification", body: ""};
+    try { data = event.data.json(); } catch(e) {}
+    var tag = data.tag || "";
+    event.waitUntil(
+      (tag ? self.registration.getNotifications() : Promise.resolve([]))
+      .then(function(all) {
+        var count = 1;
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].tag && all[i].tag.indexOf(tag + "-") === 0) {
+            var c = all[i].data && all[i].data.count;
+            if (c) count = c + 1;
+            all[i].close();
+          }
+        }
+        var title = data.title;
+        var body = data.body || "";
+        if (count > 1) {
+          body = count + " new";
+        }
+        return self.registration.showNotification(title, {
+          body: body,
+          icon: data.icon || "",
+          tag: tag + "-" + Date.now(),
+          data: {url: data.url || "", count: count}
+        });
+      })
+    );
+  });
+  self.addEventListener("notificationclick", function(event) {
+    event.notification.close();
+    if (event.notification.data && event.notification.data.url) {
+      event.waitUntil(clients.openWindow(event.notification.data.url));
+    }
+  });
+  '''
 |%
 ++  agent
   |=  [base=path sub-id=@t allow-comets=?]
@@ -136,9 +195,17 @@
       ::
       =^  cards  agent  (on-poke:ag mark vase)
       [cards this]
-    ::  push route -- require authentication
+    ::  push route
     ::
     =/  sub-path=path  (slag pb-len site)
+    ::  serve default service worker publicly
+    ::
+    ?:  &(=('GET' meth) =(sub-path /sw))
+      :_  this
+      %+  give-simple-payload:app:server  eyre-id
+      (js-response:gen:server default-sw-js)
+    ::  all other push routes require authentication
+    ::
     ?.  authenticated.inbound-request
       :_  this
       (err-cards:hep eyre-id 403 'not authenticated')
