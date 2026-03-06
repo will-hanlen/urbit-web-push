@@ -23,6 +23,11 @@
 ::  The third argument (allow-comets) controls whether comet
 ::  ships may register push subscriptions.
 ::
+::  The fourth argument (max-sends) controls how many delivery
+::  records to retain in send-order/sends.  When 0, no delivery
+::  records are kept (cards are still sent, just no tracking).
+::  Use 0 for production; set higher for debugging.
+::
 ::  The wrapper intercepts HTTP requests under {base}/~web-pusher:
 ::
 ::    GET  {base}/~web-pusher/sw.js       -- default service worker (public)
@@ -126,7 +131,7 @@
   '''
 |%
 ++  agent
-  |=  [base=path sub-id=@t allow-comets=?]
+  |=  [base=path sub-id=@t allow-comets=? max-sends=@ud]
   |=  =agent:gall
   ^-  agent:gall
   =|  pstate=pusher-state
@@ -135,7 +140,7 @@
   |_  =bowl:gall
   +*  this  .
       ag    ~(. agent bowl)
-      hep   ~(. helper bowl pstate allow-comets)
+      hep   ~(. helper bowl pstate allow-comets max-sends)
   ::
   ++  on-init
     ^-  (quip card:agent:gall agent:gall)
@@ -236,11 +241,25 @@
         ``noun+!>(pstate)
           [%x %web-pusher %sends @ ~]
         =/  =ship  (slav %p i.t.t.t.path)
-        ``noun+!>((skim sends.pstate |=(d=delivery =(ship.d ship))))
+        =/  res=(list [send-key delivery])
+          %+  murn  send-order.pstate
+          |=  key=send-key
+          ?.  =(ship.key ship)  ~
+          =/  del  (~(get by sends.pstate) key)
+          ?~  del  ~
+          `[key u.del]
+        ``noun+!>(res)
           [%x %web-pusher %sends @ @ ~]
         =/  =ship  (slav %p i.t.t.t.path)
         =/  id=@ta  i.t.t.t.t.path
-        ``noun+!>((skim sends.pstate |=(d=delivery &(=(ship.d ship) =(sub-id.d id)))))
+        =/  res=(list [send-key delivery])
+          %+  murn  send-order.pstate
+          |=  key=send-key
+          ?.  &(=(ship.key ship) =(sub-id.key id))  ~
+          =/  del  (~(get by sends.pstate) key)
+          ?~  del  ~
+          `[key u.del]
+        ``noun+!>(res)
       ==
     (on-peek:ag path)
   ::
@@ -255,7 +274,7 @@
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=([%web-pusher %eyre ~] wire)
       `this
-    ?.  ?=([%web-pusher %send @ @ ~] wire)
+    ?.  ?=([%web-pusher %send @ @ @ ~] wire)
       =^  cards  agent  (on-arvo:ag wire sign-arvo)
       [cards this]
     =^  cards  pstate  (handle-iris:hep wire sign-arvo)
@@ -269,7 +288,7 @@
   --
 ::
 ++  helper
-  |_  [=bowl:gall pstate=pusher-state allow-comets=?]
+  |_  [=bowl:gall pstate=pusher-state allow-comets=? max-sends=@ud]
   ::
   ++  vapid-pub-b64
     ^-  @t
@@ -297,59 +316,67 @@
       %+  turn  ~(tap by inner)
       |=  [id=@ta sub=subscription]
       [ship id sub]
-    =/  cards=(list card:agent:gall)
-      %+  turn  trips
-      |=  [=ship id=@ta sub=subscription]
-      ^-  card:agent:gall
-      =/  req=request:http
-        (send-notification:web-push sub u.config.pstate payload exp eny.bowl)
-      [%pass /web-pusher/send/(scot %p ship)/[id] %arvo %i %request req *outbound-config:iris]
-    =/  new-sends=(list delivery)
-      %+  turn  trips
-      |=  [=ship id=@ta sub=subscription]
-      ^-  delivery
-      [ship id title.msg now.bowl %pending]
-    [cards pstate(sends (trim-sends (weld new-sends sends.pstate)))]
+    =/  ps  pstate
+    =/  cards=(list card:agent:gall)  ~
+    |-
+    ?~  trips
+      [(flop cards) (trim-sends ps)]
+    =/  [=ship id=@ta sub=subscription]  i.trips
+    =/  req=request:http
+      (send-notification:web-push sub u.config.pstate payload exp eny.bowl)
+    ?:  =(0 max-sends)
+      %=  $
+        trips  t.trips
+        cards  :_  cards
+          [%pass /web-pusher/send/(scot %p ship)/[id]/(scot %ud 0) %arvo %i %request req *outbound-config:iris]
+      ==
+    =/  nid=@ud  next-id.ps
+    %=  $
+      trips  t.trips
+      cards  :_  cards
+        [%pass /web-pusher/send/(scot %p ship)/[id]/(scot %ud nid) %arvo %i %request req *outbound-config:iris]
+      ps  %=  ps
+            next-id  +(nid)
+            send-order  [[ship id nid] send-order.ps]
+            sends  (~(put by sends.ps) [ship id nid] [title.msg now.bowl %pending])
+          ==
+    ==
   ::
   ++  handle-iris
     |=  [=wire =sign-arvo]
     ^-  (quip card:agent:gall pusher-state)
-    ?>  ?=([@ @ @ @ ~] wire)
+    ?>  ?=([@ @ @ @ @ ~] wire)
     =/  =ship  (slav %p i.t.t.wire)
-    =/  sub-id=@ta  i.t.t.t.wire
+    =/  sid=@ta  i.t.t.t.wire
+    =/  nid=@ud  (slav %ud i.t.t.t.t.wire)
+    =/  key=send-key  [ship sid nid]
     ?.  ?=([%iris %http-response *] sign-arvo)
       `pstate
     =/  resp=client-response:iris  +>.sign-arvo
     ?:  ?=(%cancel -.resp)
-      `(update-delivery ship sub-id %failed)
+      `(update-delivery key %failed)
     ?.  ?=(%finished -.resp)  `pstate
     =/  status=@ud  status-code.response-header.resp
     ?:  =(201 status)
-      `(update-delivery ship sub-id %sent)
+      `(update-delivery key %sent)
     ?:  |(=(410 status) =(404 status))
       =/  ds=delivery-status  ?:(=(410 status) %expired %gone)
-      =/  ps  (update-delivery ship sub-id ds)
+      =/  ps  (update-delivery key ds)
       ::  remove the specific subscription
       ::
       =/  inner=(map @ta subscription)  (~(gut by subs.ps) ship ~)
-      =/  new-inner  (~(del by inner) sub-id)
+      =/  new-inner  (~(del by inner) sid)
       ?:  =(~ new-inner)
         `ps(subs (~(del by subs.ps) ship))
       `ps(subs (~(put by subs.ps) ship new-inner))
-    `(update-delivery ship sub-id %failed)
+    `(update-delivery key %failed)
   ::
   ++  update-delivery
-    |=  [=ship sub-id=@ta ds=delivery-status]
+    |=  [key=send-key ds=delivery-status]
     ^-  pusher-state
-    =-  pstate(sends -)
-    =/  found=?  |
-    %+  turn  sends.pstate
-    |=  d=delivery
-    ?:  found  d
-    ?.  &(=(ship.d ship) =(sub-id.d sub-id) =(%pending delivery-status.d))
-      d
-    =.  found  &
-    d(delivery-status ds)
+    ?.  (~(has by sends.pstate) key)
+      pstate
+    pstate(sends (~(jab by sends.pstate) key |=(d=delivery d(delivery-status ds))))
   ::
   ++  handle-http
     |=  [eyre-id=@ta site=path method=@t body=(unit octs)]
@@ -434,7 +461,12 @@
     ^-  manx
     =/  sub-list=(list [@p (map @ta subscription)])
       ~(tap by subs.pstate)
-    =/  send-list=(list delivery)  sends.pstate
+    =/  send-list=(list [send-key delivery])
+      %+  murn  send-order.pstate
+      |=  key=send-key
+      =/  del  (~(get by sends.pstate) key)
+      ?~  del  ~
+      `[key u.del]
     ::  build config section content
     ::
     =/  config-body=manx
@@ -499,11 +531,11 @@
           ;th: status
         ==
         ;*  %+  turn  send-list
-            |=  d=delivery
+            |=  [key=send-key d=delivery]
             ^-  manx
             ;tr
-              ;td: {(scow %p ship.d)}
-              ;td: {(trip sub-id.d)}
+              ;td: {(scow %p ship.key)}
+              ;td: {(trip sub-id.key)}
               ;td: {(trip title.d)}
               ;td: {(scow %da sent-at.d)}
               ;td(class "{(trip delivery-status.d)}"): {(trip delivery-status.d)}
@@ -587,10 +619,21 @@
     ==
   ::
   ++  trim-sends
-    |=  s=(list delivery)
-    ^-  (list delivery)
-    ?:  (lte (lent s) 200)  s
-    (scag 200 s)
+    |=  ps=pusher-state
+    ^-  pusher-state
+    ?:  =(0 max-sends)
+      ps(send-order ~, sends ~)
+    ?:  (lte (lent send-order.ps) max-sends)
+      ps
+    =/  kept=(list send-key)  (scag max-sends send-order.ps)
+    =/  new-sends=(map send-key delivery)
+      %-  ~(gas by *(map send-key delivery))
+      %+  murn  kept
+      |=  key=send-key
+      =/  del  (~(get by sends.ps) key)
+      ?~  del  ~
+      `[key u.del]
+    ps(send-order kept, sends new-sends)
   ::
   ++  ok-cards
     |=  eyre-id=@ta

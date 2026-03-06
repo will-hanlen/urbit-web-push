@@ -13,16 +13,17 @@
       tag=(unit @t)
   ==
 +$  delivery-status  ?(%pending %sent %failed %expired %gone)
++$  send-key  [ship=@p sub-id=@ta notif-id=@ud]
 +$  delivery
-  $:  ship=@p
-      sub-id=@ta
-      title=@t
+  $:  title=@t
       sent-at=@da
       =delivery-status
   ==
 +$  pusher-state
   $:  config=(unit push-config)
       subs=(map @p (map @ta subscription))
-      sends=(list delivery)
+      send-order=(list send-key)
+      sends=(map send-key delivery)
+      next-id=@ud
   ==
 --

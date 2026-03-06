@@ -24,6 +24,7 @@
       /apps/push
       'mailto:you@example.com'
       %.y
+      200
     ==
 ^-  agent:gall
 |_  =bowl:gall
@@ -118,15 +119,18 @@
       ==
     =/  sends-json=json
       :-  %a
-      %+  turn  sends.ps
-      |=  d=delivery:push
+      %+  murn  send-order.ps
+      |=  key=send-key:push
+      =/  del  (~(get by sends.ps) key)
+      ?~  del  ~
+      %-  some
       %-  pairs:enjs:format
-      :~  ['ship' [%s (scot %p ship.d)]]
-          ['sub-id' [%s sub-id.d]]
-          ['title' [%s title.d]]
+      :~  ['ship' [%s (scot %p ship.key)]]
+          ['sub-id' [%s sub-id.key]]
+          ['title' [%s title.u.del]]
           :-  'sent-at'
-          [%n (crip (a-co:co (mul 1.000 (unm:chrono:userlib sent-at.d))))]
-          ['status' [%s (scot %tas delivery-status.d)]]
+          [%n (crip (a-co:co (mul 1.000 (unm:chrono:userlib sent-at.u.del))))]
+          ['status' [%s (scot %tas delivery-status.u.del)]]
       ==
     =/  state-json=json
       %-  pairs:enjs:format
