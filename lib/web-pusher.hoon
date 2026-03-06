@@ -34,6 +34,7 @@
 ::    GET  {base}/~web-pusher/vapid-key   -- VAPID public key
 ::    POST {base}/~web-pusher/subscribe   -- add subscription
 ::    POST {base}/~web-pusher/unsubscribe -- remove subscription
+::    POST {base}/~web-pusher/check-sub   -- verify subscription exists
 ::
 ::  POST body formats (JSON):
 ::
@@ -46,6 +47,9 @@
 ::
 ::    /unsubscribe:
 ::      { "id": "b-1709654321" }
+::
+::    /check-sub:
+::      { "endpoint": "https://fcm.googleapis.com/..." }
 ::
 ::  The sw.js endpoint is served without authentication so browsers
 ::  can register it as a service worker from any scope.
@@ -91,7 +95,25 @@
     self.skipWaiting();
   });
   self.addEventListener("activate", function(event) {
-    event.waitUntil(self.clients.claim());
+    event.waitUntil(
+      self.clients.claim().then(function() {
+        return self.registration.pushManager.getSubscription();
+      }).then(function(sub) {
+        if (!sub) return;
+        var base = self.registration.scope.replace(/\/~web-pusher\/$/, "");
+        return fetch(base + "/~web-pusher/check-sub", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({endpoint: sub.endpoint})
+        }).then(function(res) {
+          if (res.status === 404) {
+            return sub.unsubscribe().then(function() {
+              return self.registration.unregister();
+            });
+          }
+        });
+      })
+    );
   });
   self.addEventListener("push", function(event) {
     var data = {title: "Notification", body: ""};
@@ -400,6 +422,8 @@
         (do-subscribe eyre-id body)
       ?:  =(site /unsubscribe)
         (do-unsubscribe eyre-id body)
+      ?:  =(site /check-sub)
+        (do-check-sub eyre-id body)
       [(give-simple-payload:app:server eyre-id not-found:gen:server) pstate]
     [(give-simple-payload:app:server eyre-id not-found:gen:server) pstate]
   ::
@@ -454,6 +478,29 @@
     ?:  =(~ new-inner)
       pstate(subs (~(del by subs.pstate) src.bowl))
     pstate(subs (~(put by subs.pstate) src.bowl new-inner))
+  ::
+  ++  do-check-sub
+    ::  check if a push endpoint is registered for this user
+    ::  returns 200 if found, 404 if not
+    ::
+    |=  [eyre-id=@ta body=(unit octs)]
+    ^-  (quip card:agent:gall pusher-state)
+    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
+    =/  jon=(unit json)  (de:json:html q.u.body)
+    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
+    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
+    =/  ep-j  (~(get by p.u.jon) 'endpoint')
+    ?~  ep-j  [(err-cards eyre-id 400 'missing endpoint') pstate]
+    ?.  ?=(%s -.u.ep-j)  [(err-cards eyre-id 400 'endpoint must be string') pstate]
+    =/  ep=@t  p.u.ep-j
+    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
+    =/  found=?
+      %+  lien  ~(val by inner)
+      |=(sub=subscription =(endpoint.sub ep))
+    :_  pstate
+    ?:  found
+      (ok-cards eyre-id)
+    (err-cards eyre-id 404 'subscription not found')
   ::
   ::
   ::

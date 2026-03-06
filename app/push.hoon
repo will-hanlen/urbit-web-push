@@ -338,9 +338,22 @@
         log("Service worker registered");
         var sub = await swReg.pushManager.getSubscription();
         if (sub) {
-          setStatus("This browser is subscribed", "ok");
-          unsubBtn.disabled = false;
-          log("Active subscription found");
+          var cr = await fetch(P + "/check-sub", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({endpoint: sub.endpoint})
+          });
+          if (cr.ok) {
+            setStatus("This browser is subscribed", "ok");
+            unsubBtn.disabled = false;
+            log("Active subscription found");
+          } else {
+            await sub.unsubscribe();
+            localStorage.removeItem("push-sub-id");
+            setStatus("This browser is not subscribed", "info");
+            subBtn.disabled = false;
+            log("Stale subscription cleared");
+          }
         } else {
           setStatus("This browser is not subscribed", "info");
           subBtn.disabled = false;
