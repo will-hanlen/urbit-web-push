@@ -67,7 +67,8 @@
 %+  verb  |
 %-  %:  agent:web-pusher
       /apps/push
-      'mailto:admin@urbit.org'
+      'mailto:you@example.com'
+      %.y
     ==
 ^-  agent:gall
 |_  =bowl:gall
@@ -133,7 +134,8 @@
       =/  v  (~(get by obj) 'tag')
       ?~(v ~ ?.(?=(%s -.u.v) ~ `p.u.v))
     =/  msg=push-message:push  [p.u.title-j p.u.body-j icon url tag]
-    :*  [%pass /notify %agent [our dap]:bowl %poke %push-send !>(msg)]
+    =/  target  [*(set @p) msg]
+    :*  [%pass /notify %agent [our dap]:bowl %poke %push-send !>(target)]
         (ok-cards eyre-id)
     ==
   ++  get-state
@@ -152,10 +154,14 @@
       ==
     =/  subs-json=json
       :-  %a
+      %-  zing
       %+  turn  ~(tap by subs.ps)
+      |=  [=ship inner=(map @ta subscription:push)]
+      %+  turn  ~(tap by inner)
       |=  [id=@ta sub=subscription:push]
       %-  pairs:enjs:format
-      :~  ['id' [%s id]]
+      :~  ['ship' [%s (scot %p ship)]]
+          ['id' [%s id]]
           ['endpoint' [%s endpoint.sub]]
       ==
     =/  sends-json=json
@@ -163,7 +169,8 @@
       %+  turn  sends.ps
       |=  d=delivery:push
       %-  pairs:enjs:format
-      :~  ['sub-id' [%s sub-id.d]]
+      :~  ['ship' [%s (scot %p ship.d)]]
+          ['sub-id' [%s sub-id.d]]
           ['title' [%s title.d]]
           :-  'sent-at'
           [%n (crip (a-co:co (mul 1.000 (unm:chrono:userlib sent-at.d))))]
@@ -335,10 +342,11 @@
         }
         var si = document.getElementById("subs-info");
         if (st.subs && st.subs.length > 0) {
-          var h = '<table><tr><th>ID</th><th>Endpoint</th></tr>';
+          var h = '<table><tr><th>Ship</th><th>ID</th><th>Endpoint</th></tr>';
           st.subs.forEach(function(sub) {
-            h += '<tr><td class="mono">' + esc(sub.id) +
-              '</td><td class="mono">' + esc(truncate(sub.endpoint, 60)) +
+            h += '<tr><td class="mono">' + esc(sub.ship) +
+              '</td><td class="mono">' + esc(sub.id) +
+              '</td><td class="mono">' + esc(truncate(sub.endpoint, 50)) +
               '</td></tr>';
           });
           si.innerHTML = h + '</table>';
@@ -348,11 +356,12 @@
         var di = document.getElementById("sends-info");
         if (st.sends && st.sends.length > 0) {
           var h = '<table><tr><th>Time</th><th>Title</th>' +
-            '<th>Subscriber</th><th>Status</th></tr>';
+            '<th>Ship</th><th>Sub ID</th><th>Status</th></tr>';
           st.sends.forEach(function(d) {
             var t = new Date(d["sent-at"]).toLocaleString();
             h += '<tr><td>' + esc(t) + '</td>' +
               '<td>' + esc(d.title) + '</td>' +
+              '<td class="mono">' + esc(d.ship) + '</td>' +
               '<td class="mono">' + esc(d["sub-id"]) + '</td>' +
               '<td><span class="badge ' + badgeClass(d.status) + '">' +
               esc(d.status) + '</span></td></tr>';

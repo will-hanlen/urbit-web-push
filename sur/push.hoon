@@ -14,14 +14,15 @@
   ==
 +$  delivery-status  ?(%pending %sent %failed %expired %gone)
 +$  delivery
-  $:  sub-id=@ta
+  $:  ship=@p
+      sub-id=@ta
       title=@t
       sent-at=@da
       =delivery-status
   ==
 +$  pusher-state
   $:  config=(unit push-config)
-      subs=(map @ta subscription)
+      subs=(map @p (map @ta subscription))
       sends=(list delivery)
   ==
 --

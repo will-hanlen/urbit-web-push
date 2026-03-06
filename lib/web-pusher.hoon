@@ -14,10 +14,14 @@
 ::    %-  %:  agent:web-pusher
 ::          /apps/my-app
 ::          'mailto:admin@example.com'
+::          %.y
 ::        ==
 ::    ^-  agent:gall
 ::    |_  =bowl:gall
 ::    ...
+::
+::  The third argument (allow-comets) controls whether comet
+::  ships may register push subscriptions.
 ::
 ::  The wrapper intercepts HTTP requests under {base}/~web-pusher:
 ::
@@ -42,28 +46,28 @@
 ::  The wrapper also intercepts:
 ::
 ::    - Arvo responses on /web-pusher/** wires (iris callbacks)
-::    - Pokes with mark %push-send and %push-send-to
+::    - Pokes with mark %push-send: [(set @p) push-message]
+::      If the set is empty, sends to all ships (broadcast).
 ::    - Peeks on /web-pusher/**:
 ::
 ::        /u/web-pusher          -- loob, always %.y
 ::        /x/web-pusher/state    -- pusher-state noun
-::        /x/web-pusher/sends/ID -- (list delivery) for sub ID
+::        /x/web-pusher/sends/@p -- (list delivery) for ship
+::        /x/web-pusher/sends/@p/@ta -- (list delivery) for sub
 ::
 ::  The inner agent triggers notifications by poking itself:
 ::
-::    [%pass /notify %agent [our dap]:bowl %poke %push-send !>(msg)]
+::    =/  target  [(set @p) push-message]
+::    [%pass /notify %agent [our dap]:bowl %poke %push-send !>(target)]
 ::
-::  Or to specific subscribers:
-::
-::    =/  target  [ids=(list @ta) msg=push-message]
-::    [%pass /notify %agent [our dap]:bowl %poke %push-send-to !>(target)]
+::  Pass ~ (empty set) to broadcast to all ships.
 ::
 /-  push
 /+  web-push, server
 =,  push
 |%
 ++  agent
-  |=  [base=path sub-id=@t]
+  |=  [base=path sub-id=@t allow-comets=?]
   |=  =agent:gall
   ^-  agent:gall
   =|  pstate=pusher-state
@@ -72,7 +76,7 @@
   |_  =bowl:gall
   +*  this  .
       ag    ~(. agent bowl)
-      hep   ~(. helper bowl pstate)
+      hep   ~(. helper bowl pstate allow-comets)
   ::
   ++  on-init
     ^-  (quip card:agent:gall agent:gall)
@@ -91,18 +95,27 @@
   ++  on-load
     |=  old-state=vase
     ^-  (quip card:agent:gall agent:gall)
-    ?.  ?=([%web-pusher ^] q.old-state)
-      ::  first load after wrapping: inner agent state only
+    =/  old=(unit [%web-pusher pusher-state vase])
+      ((soft ,[%web-pusher pusher-state vase]) q.old-state)
+    ?~  old
+      ::  state doesn't match current schema -- reset pusher state
       ::
       =.  config.pstate
         (some (generate-vapid-keypair:web-push eny.bowl sub-id))
-      =^  cards  agent  (on-load:ag old-state)
+      =/  inner=vase
+        ::  try unwrapping old wrapper format
+        ::
+        ?.  ?=([%web-pusher ^] q.old-state)
+          old-state
+        =/  [%web-pusher * inner=vase]
+          !<([%web-pusher * vase] old-state)
+        inner
+      =^  cards  agent  (on-load:ag inner)
       :_  this
       :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
           cards
       ==
-    =/  [%web-pusher ps=pusher-state inner=vase]
-      !<([%web-pusher pusher-state vase] old-state)
+    =/  [%web-pusher ps=pusher-state inner=vase]  u.old
     =.  pstate  ps
     =^  cards  agent  (on-load:ag inner)
     :_  this
@@ -114,14 +127,9 @@
     |=  [=mark =vase]
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=(%push-send mark)
-      =/  msg=push-message  !<(push-message vase)
-      =^  cards  pstate  (send-to-all:hep msg)
-      [cards this]
-    ::
-    ?:  ?=(%push-send-to mark)
-      =/  [ids=(list @ta) msg=push-message]
-        !<([(list @ta) push-message] vase)
-      =^  cards  pstate  (send-to-ids:hep ids msg)
+      =/  [ships=(set @p) msg=push-message]
+        !<([(set @p) push-message] vase)
+      =^  cards  pstate  (send-to-ships:hep ships msg)
       [cards this]
     ::
     ?.  ?=(%handle-http-request mark)
@@ -172,8 +180,12 @@
           [%x %web-pusher %state ~]
         ``noun+!>(pstate)
           [%x %web-pusher %sends @ ~]
-        =/  id=@ta  i.t.t.t.path
-        ``noun+!>((skim sends.pstate |=(d=delivery =(sub-id.d id))))
+        =/  =ship  (slav %p i.t.t.t.path)
+        ``noun+!>((skim sends.pstate |=(d=delivery =(ship.d ship))))
+          [%x %web-pusher %sends @ @ ~]
+        =/  =ship  (slav %p i.t.t.t.path)
+        =/  id=@ta  i.t.t.t.t.path
+        ``noun+!>((skim sends.pstate |=(d=delivery &(=(ship.d ship) =(sub-id.d id)))))
       ==
     (on-peek:ag path)
   ::
@@ -188,7 +200,7 @@
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=([%web-pusher %eyre ~] wire)
       `this
-    ?.  ?=([%web-pusher %send @ ~] wire)
+    ?.  ?=([%web-pusher %send @ @ ~] wire)
       =^  cards  agent  (on-arvo:ag wire sign-arvo)
       [cards this]
     =^  cards  pstate  (handle-iris:hep wire sign-arvo)
@@ -202,71 +214,84 @@
   --
 ::
 ++  helper
-  |_  [=bowl:gall pstate=pusher-state]
+  |_  [=bowl:gall pstate=pusher-state allow-comets=?]
   ::
   ++  vapid-pub-b64
     ^-  @t
     ?~  config.pstate  !!
     (~(en base64:mimes:html | &) [65 (rev 3 65 public-key.u.config.pstate)])
   ::
-  ++  send-to-all
-    |=  msg=push-message
-    ^-  (quip card:agent:gall pusher-state)
-    (send-to-ids ~(tap in ~(key by subs.pstate)) msg)
-  ::
-  ++  send-to-ids
-    |=  [ids=(list @ta) msg=push-message]
+  ++  send-to-ships
+    |=  [ships=(set @p) msg=push-message]
     ^-  (quip card:agent:gall pusher-state)
     ?~  config.pstate  ~|(%push-not-configured !!)
+    ::  empty set means broadcast to all ships
+    ::
+    =/  targets=(set @p)
+      ?:  =(~ ships)  ~(key by subs.pstate)
+      ships
     =/  payload=octs  (message-to-json:web-push msg)
     =/  exp=@ud  (add (unt:chrono:userlib now.bowl) 86.400)
+    ::  collect all [ship id subscription] triples
+    ::
+    =/  trips=(list [=ship id=@ta sub=subscription])
+      %-  zing
+      %+  turn  ~(tap in targets)
+      |=  =ship
+      =/  inner=(map @ta subscription)  (~(gut by subs.pstate) ship ~)
+      %+  turn  ~(tap by inner)
+      |=  [id=@ta sub=subscription]
+      [ship id sub]
     =/  cards=(list card:agent:gall)
-      %+  murn  ids
-      |=  id=@ta
-      ^-  (unit card:agent:gall)
-      =/  sub  (~(get by subs.pstate) id)
-      ?~  sub  ~
+      %+  turn  trips
+      |=  [=ship id=@ta sub=subscription]
+      ^-  card:agent:gall
       =/  req=request:http
-        (send-notification:web-push u.sub u.config.pstate payload exp eny.bowl)
-      `[%pass /web-pusher/send/[id] %arvo %i %request req *outbound-config:iris]
+        (send-notification:web-push sub u.config.pstate payload exp eny.bowl)
+      [%pass /web-pusher/send/(scot %p ship)/[id] %arvo %i %request req *outbound-config:iris]
     =/  new-sends=(list delivery)
-      %+  weld
-        %+  murn  ids
-        |=  id=@ta
-        ?.  (~(has by subs.pstate) id)  ~
-        `[id title.msg now.bowl %pending]
-      sends.pstate
-    [cards pstate(sends (trim-sends new-sends))]
+      %+  turn  trips
+      |=  [=ship id=@ta sub=subscription]
+      ^-  delivery
+      [ship id title.msg now.bowl %pending]
+    [cards pstate(sends (trim-sends (weld new-sends sends.pstate)))]
   ::
   ++  handle-iris
     |=  [=wire =sign-arvo]
     ^-  (quip card:agent:gall pusher-state)
-    ?>  ?=([@ @ @ ~] wire)
-    =/  sub-id=@ta  i.t.t.wire
+    ?>  ?=([@ @ @ @ ~] wire)
+    =/  =ship  (slav %p i.t.t.wire)
+    =/  sub-id=@ta  i.t.t.t.wire
     ?.  ?=([%iris %http-response *] sign-arvo)
       `pstate
     =/  resp=client-response:iris  +>.sign-arvo
     ?:  ?=(%cancel -.resp)
-      `(update-delivery sub-id %failed)
+      `(update-delivery ship sub-id %failed)
     ?.  ?=(%finished -.resp)  `pstate
     =/  status=@ud  status-code.response-header.resp
     ?:  =(201 status)
-      `(update-delivery sub-id %sent)
+      `(update-delivery ship sub-id %sent)
     ?:  |(=(410 status) =(404 status))
       =/  ds=delivery-status  ?:(=(410 status) %expired %gone)
-      =/  ps  (update-delivery sub-id ds)
-      `ps(subs (~(del by subs.ps) sub-id))
-    `(update-delivery sub-id %failed)
+      =/  ps  (update-delivery ship sub-id ds)
+      ::  remove the specific subscription
+      ::
+      =/  inner=(map @ta subscription)  (~(gut by subs.ps) ship ~)
+      =/  new-inner  (~(del by inner) sub-id)
+      ?:  =(~ new-inner)
+        `ps(subs (~(del by subs.ps) ship))
+      `ps(subs (~(put by subs.ps) ship new-inner))
+    `(update-delivery ship sub-id %failed)
   ::
   ++  update-delivery
-    |=  [sub-id=@ta ds=delivery-status]
+    |=  [=ship sub-id=@ta ds=delivery-status]
     ^-  pusher-state
     =-  pstate(sends -)
     =/  found=?  |
     %+  turn  sends.pstate
     |=  d=delivery
     ?:  found  d
-    ?.  &(=(sub-id.d sub-id) =(%pending delivery-status.d))
+    ?.  &(=(ship.d ship) =(sub-id.d sub-id) =(%pending delivery-status.d))
       d
     =.  found  &
     d(delivery-status ds)
@@ -294,6 +319,10 @@
     |=  [eyre-id=@ta body=(unit octs)]
     ^-  (quip card:agent:gall pusher-state)
     ?~  body  [(err-cards eyre-id 400 'no body') pstate]
+    ::  reject comets if not allowed
+    ::
+    ?:  &(!allow-comets ?=(%pawn (clan:title src.bowl)))
+      [(err-cards eyre-id 403 'comets not allowed') pstate]
     =/  jon=(unit json)  (de:json:html q.u.body)
     ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
     ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
@@ -315,7 +344,10 @@
     =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
     =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
     =/  sub=subscription  [p.u.ep-j dh au]
-    [(ok-cards eyre-id) pstate(subs (~(put by subs.pstate) `@ta`p.u.id-j sub))]
+    =/  id=@ta  `@ta`p.u.id-j
+    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
+    :-  (ok-cards eyre-id)
+    pstate(subs (~(put by subs.pstate) src.bowl (~(put by inner) id sub)))
   ::
   ++  do-unsubscribe
     |=  [eyre-id=@ta body=(unit octs)]
@@ -327,7 +359,13 @@
     =/  id-j  (~(get by p.u.jon) 'id')
     ?~  id-j  [(err-cards eyre-id 400 'missing id') pstate]
     ?.  ?=(%s -.u.id-j)  [(err-cards eyre-id 400 'id must be string') pstate]
-    [(ok-cards eyre-id) pstate(subs (~(del by subs.pstate) `@ta`p.u.id-j))]
+    =/  id=@ta  `@ta`p.u.id-j
+    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
+    =/  new-inner  (~(del by inner) id)
+    :-  (ok-cards eyre-id)
+    ?:  =(~ new-inner)
+      pstate(subs (~(del by subs.pstate) src.bowl))
+    pstate(subs (~(put by subs.pstate) src.bowl new-inner))
   ::
   ::
   ::
