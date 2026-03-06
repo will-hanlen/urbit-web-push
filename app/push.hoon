@@ -1,11 +1,9 @@
-::  app/push: web push notification demo agent
+::  app/push: groupchat with push notifications
 ::
-::  Wrapped by web-pusher to handle VAPID keys, browser
+::  Wrapped by web-pusher for VAPID keys, browser
 ::  subscriptions, encryption, and delivery tracking.
-::  This agent serves the UI and delegates all push
-::  operations to the wrapper.
 ::
-/-  push
+/-  groupchat
 /+  web-pusher, default-agent, verb, server
 ::
 |%
@@ -13,7 +11,9 @@
 +$  versioned-state
   $%  [%0 state-0]
   ==
-+$  state-0  ~
++$  state-0
+  $:  msgs=(list message:groupchat)
+  ==
 --
 ::
 =|  state-0
@@ -36,7 +36,7 @@
 ++  on-load
   |=  =vase
   ^-  (quip card _this)
-  `this
+  `this(state !<(state-0 vase))
 ::
 ++  on-poke
   |=  [=mark =vase]
@@ -48,214 +48,225 @@
   =/  rl  (parse-request-line:server url.request.inbound-request)
   =/  site=path  site.rl
   =/  meth=@t  method.request.inbound-request
-  ?.  authenticated.inbound-request
+  =/  sender  src.bowl
+  =/  planet-plus  (lte (met 3 sender) 4)
+  =/  allowed  |(authenticated.inbound-request planet-plus)
+  ::  manifest is public
+  ::
+  ?:  &(=('GET' meth) =(/apps/push/icon site.rl))
     :_  this
-    ?:  =([~ /apps/push] [ext.rl site.rl])
-      %+  give-simple-payload:app:server  eyre-id
-      (login-redirect:gen:server request.inbound-request)
-    (err-cards eyre-id 403 'not authenticated')
-  :_  this
+    %+  give-simple-payload:app:server  eyre-id
+    (icon-response)
+  ?:  &(=('GET' meth) =(/apps/push/manifest site.rl))
+    :_  this
+    %+  give-simple-payload:app:server  eyre-id
+    (manifest-response)
+  ::  main page
+  ::
   ?:  &(=('GET' meth) =(site /apps/push))
+    :_  this
     %+  give-simple-payload:app:server  eyre-id
-    (html-response:gen:server page-html)
-  ?:  &(=('GET' meth) =(site /apps/push/state))
-    (get-state eyre-id)
+    ?:  allowed
+      (html-response:gen:server (page-html sender))
+    (html-response:gen:server login-html)
+  ::  everything below requires planet+
+  ::
+  ?.  allowed
+    :_  this
+    (err-cards eyre-id 403 'not allowed')
+  ::
   ?:  &(=('POST' meth) =(site /apps/push/send))
-    (do-send eyre-id body.request.inbound-request)
+    (do-send eyre-id sender body.request.inbound-request)
+  ?:  &(=('GET' meth) =(site /apps/push/messages))
+    :_  this
+    (get-messages eyre-id)
+  :_  this
   (give-simple-payload:app:server eyre-id not-found:gen:server)
-  ++  do-send
-    |=  [eyre-id=@ta body=(unit octs)]
-    ^-  (list card)
-    ?~  body  (err-cards eyre-id 400 'no body')
-    =/  jon=(unit json)  (de:json:html q.u.body)
-    ?~  jon  (err-cards eyre-id 400 'invalid json')
-    ?.  ?=(%o -.u.jon)  (err-cards eyre-id 400 'expected object')
-    =/  obj  p.u.jon
-    =/  title-j  (~(get by obj) 'title')
-    =/  body-j   (~(get by obj) 'body')
-    ?.  ?&  ?=(^ title-j)  ?=(%s -.u.title-j)
-            ?=(^ body-j)   ?=(%s -.u.body-j)
-        ==
-      (err-cards eyre-id 400 'title and body required')
-    =/  icon=(unit @t)
-      =/  v  (~(get by obj) 'icon')
-      ?~(v ~ ?.(?=(%s -.u.v) ~ `p.u.v))
-    =/  url=(unit @t)
-      =/  v  (~(get by obj) 'url')
-      ?~(v ~ ?.(?=(%s -.u.v) ~ `p.u.v))
-    =/  tag=(unit @t)
-      =/  v  (~(get by obj) 'tag')
-      ?~(v ~ ?.(?=(%s -.u.v) ~ `p.u.v))
-    =/  msg=push-message:push  [p.u.title-j p.u.body-j icon url tag]
-    =/  target  [*(set @p) msg]
-    :*  [%pass /notify %agent [our dap]:bowl %poke %push-send !>(target)]
-        (ok-cards eyre-id)
-    ==
-  ++  get-state
-    |=  eyre-id=@ta
-    ^-  (list card)
-    =/  ps=pusher-state:push
-      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
-    =/  vapid-pub=@t
-      ?~  config.ps  ''
-      (~(en base64:mimes:html | &) [65 (rev 3 65 public-key.u.config.ps)])
-    =/  conf-json=json
-      ?~  config.ps  ~
-      %-  pairs:enjs:format
-      :~  ['sub' [%s sub.u.config.ps]]
-          ['public-key' [%s vapid-pub]]
-      ==
-    =/  subs-json=json
-      :-  %a
-      %-  zing
-      %+  turn  ~(tap by subs.ps)
-      |=  [=ship inner=(map @ta subscription:push)]
-      %+  turn  ~(tap by inner)
-      |=  [id=@ta sub=subscription:push]
-      %-  pairs:enjs:format
-      :~  ['ship' [%s (scot %p ship)]]
-          ['id' [%s id]]
-          ['endpoint' [%s endpoint.sub]]
-      ==
-    =/  sends-json=json
-      :-  %a
-      %+  murn  send-order.ps
-      |=  key=send-key:push
-      =/  del  (~(get by sends.ps) key)
-      ?~  del  ~
-      %-  some
-      %-  pairs:enjs:format
-      :~  ['ship' [%s (scot %p ship.key)]]
-          ['sub-id' [%s sub-id.key]]
-          ['title' [%s title.u.del]]
-          :-  'sent-at'
-          [%n (crip (a-co:co (mul 1.000 (unm:chrono:userlib sent-at.u.del))))]
-          ['status' [%s (scot %tas delivery-status.u.del)]]
-      ==
-    =/  state-json=json
-      %-  pairs:enjs:format
-      :~  ['config' conf-json]
-          ['subs' subs-json]
-          ['sends' sends-json]
-      ==
-    %+  give-simple-payload:app:server  eyre-id
-    (json-response:gen:server state-json)
-  ++  ok-cards
-    |=  eyre-id=@ta
-    ^-  (list card)
-    %+  give-simple-payload:app:server  eyre-id
-    %-  json-response:gen:server
-    [%o (~(gas by *(map @t json)) ~[['ok' [%b &]]])]
-  ++  err-cards
-    |=  [eyre-id=@ta code=@ud msg=@t]
-    ^-  (list card)
-    =/  bod=json  [%o (~(gas by *(map @t json)) ~[['error' [%s msg]]])]
-    %+  give-simple-payload:app:server  eyre-id
-    [[code [['content-type' 'application/json'] ~]] `(json-to-octs:server bod)]
-  ++  page-html
+  ::
+  ++  icon-response
+    |.
+    ^-  simple-payload:http
+    =/  bod=@t
+      '''
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#f0be41"/><text x="256" y="340" text-anchor="middle" font-size="280" font-family="system-ui,sans-serif" fill="#1a1a1a">gc</text></svg>
+      '''
+    [[200 [['content-type' 'image/svg+xml'] ~]] `(as-octs:mimes:html bod)]
+  ::
+  ++  manifest-response
+    |.
+    ^-  simple-payload:http
+    =/  bod=@t
+      '''
+      {"name":"Groupchat","short_name":"Groupchat","start_url":"/apps/push","display":"standalone","background_color":"#ffffff","theme_color":"#333333","icons":[{"src":"/apps/push/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+      '''
+    [[200 [['content-type' 'application/manifest+json'] ~]] `(as-octs:mimes:html bod)]
+  ::
+  ++  login-html
     ^-  octs
     %-  as-octs:mimes:html
+    %-  crip
+    =/  login-css=@t
+      '''
+      body { font-family: system-ui, sans-serif; max-width: 400px;
+        margin: 4rem auto; padding: 0 1rem; text-align: center; color: #333; background: #fff; }
+      a { display: inline-block; margin-top: 2rem; padding: 0.75rem 1.5rem;
+        background: #333; color: #fff; text-decoration: none; border-radius: 4px; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #1a1a1a; color: #e0e0e0; }
+        a { background: #e0e0e0; color: #1a1a1a; }
+      }
+      '''
+    ;:  welp
+      "<!DOCTYPE html>"
+    %-  en-xml:html
+    ;html
+      ;head
+        ;meta(charset "utf-8");
+        ;meta(name "viewport", content "width=device-width, initial-scale=1");
+        ;title: Groupchat
+        ;+  ;style: {(trip login-css)}
+      ==
+      ;body
+        ;h1: Groupchat
+        ;p: Sign in with a planet or star
+        ;a(href "/~/login?redirect=/apps/push"): Sign In
+      ==
+    ==
+    ==
+  ::
+  ++  page-html
+    |=  sender=@p
+    ^-  octs
+    %-  as-octs:mimes:html
+    %-  crip
+    ;:  welp
+      "<!DOCTYPE html>"
+      (en-xml:html (head-manx page-css))
+      "<body>"
+      (en-xml:html app-div)
+      (en-xml:html install-div)
+      "<script>var SENDER=\""
+      (trip (scot %p sender))
+      "\";\0a"
+      (trip page-js)
+      "</script></body></html>"
+    ==
+  ::
+  ++  head-manx
+    |=  css=@t
+    ^-  manx
+    ;head
+      ;meta(charset "utf-8");
+      ;meta(name "viewport", content "width=device-width, initial-scale=1");
+      ;title: Groupchat
+      ;link(rel "manifest", href "/apps/push/manifest.json");
+      ;meta(name "apple-mobile-web-app-capable", content "yes");
+      ;+  ;style: {(trip css)}
+    ==
+  ::
+  ++  app-div
+    ^-  manx
+    ;div(id "app", style "display:none;flex-direction:column;height:100vh;height:100dvh")
+      ;header
+        ;div(class "header-left")
+          ;h1: groupchat
+          ;span(id "whoami");
+        ==
+        ;div(class "header-right")
+          ;label(class "notif-label", id "notif-label")
+            ;input(type "checkbox", id "notif-toggle", onchange "toggleNotif(this.checked)");
+            ;span(class "notif-off"): turn on notifs
+            ;span(class "notif-on"): notifs on
+          ==
+          ;a(href "/~/logout", class "logout-btn"): logout
+        ==
+      ==
+      ;div(id "messages");
+      ;form(onsubmit "return sendMsg(event)")
+        ;input(id "input", placeholder "message", autocomplete "off");
+        ;button(type "submit"): send
+      ==
+    ==
+  ::
+  ++  install-div
+    ^-  manx
+    ;div(id "install", style "display:none")
+      ;h2: Install Groupchat
+      ;p: This app works best as an installed PWA.
+      ;p(id "install-instructions");
+      ;button(id "install-btn", style "display:none", onclick "doInstall()"): Install App
+    ==
+  ::
+  ++  page-css
+    ^-  @t
     '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Push Notifications - Urbit</title>
-    <style>
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 700px;
-      margin: 2rem auto; padding: 0 1rem; color: #333; }
-    h1 { font-size: 1.4rem; }
-    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
-    .status { padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 6px;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; color: #333; background: #fff;
+      display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+    header { display: flex; justify-content: space-between; align-items: center;
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid #ddd; gap: 0.5rem; }
+    .header-left { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+    .header-left h1 { font-size: 1rem; white-space: nowrap; }
+    .header-left span { font-size: 0.8rem; color: #999; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+    .notif-label { cursor: pointer; font-size: 0.8rem; font-weight: 500;
+      padding: 0.3rem 0.6rem; border-radius: 6px; border: 1.5px solid #b08a1a;
+      color: #b08a1a; }
+    .notif-label:hover { background: rgba(176,138,26,0.08); }
+    .notif-label:active { background: rgba(176,138,26,0.15); }
+    .notif-label input { display: none; }
+    .notif-on { display: none; }
+    .notif-label input:checked ~ .notif-off { display: none; }
+    .notif-label input:checked ~ .notif-on { display: inline; }
+    .notif-label:has(input:checked) { border-color: transparent; color: #999; }
+    .notif-label:has(input:checked):hover { background: none; }
+    .logout-btn { font-size: 0.8rem; color: #999; text-decoration: none;
+      padding: 0.35rem 0.5rem; border-radius: 6px; }
+    .logout-btn:active { background: rgba(0,0,0,0.06); }
+    #messages { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; }
+    .msg { margin-bottom: 0.5rem; }
+    .msg .author { font-weight: 600; font-size: 0.85rem; }
+    .msg .text { font-size: 0.9rem; }
+    .msg .time { font-size: 0.75rem; color: #999; }
+    form { display: flex; gap: 0.5rem; padding: 0.75rem 1rem;
+      border-top: 1px solid #ddd; }
+    form input { flex: 1; padding: 0.5rem; border: 1px solid #ddd;
+      border-radius: 4px; font-size: 0.9rem; }
+    form button { padding: 0.5rem 1rem; border: 1px solid #ddd;
+      border-radius: 4px; background: #333; color: #fff; cursor: pointer;
       font-size: 0.9rem; }
-    .ok { background: #d4edda; color: #155724; }
-    .err { background: #f8d7da; color: #721c24; }
-    .info { background: #cce5ff; color: #004085; }
-    button { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px;
-      cursor: pointer; font-size: 0.9rem; background: #fff; }
-    button:disabled { opacity: 0.5; cursor: default; }
-    button:hover:not(:disabled) { background: #e9ecef; }
-    .btn-row { display: flex; gap: 0.5rem; margin: 1rem 0; }
-    fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem;
-      margin: 1.5rem 0; }
-    legend { font-weight: 600; padding: 0 0.5rem; }
-    label { display: block; font-size: 0.85rem; color: #666;
-      margin-top: 0.75rem; }
-    input, textarea { display: block; width: 100%; padding: 0.5rem;
-      border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;
-      margin-top: 0.25rem; }
-    textarea { resize: vertical; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem;
-      margin: 0.5rem 0; }
-    th, td { text-align: left; padding: 0.4rem 0.6rem;
-      border-bottom: 1px solid #e9ecef; }
-    th { font-weight: 600; color: #666; }
-    td.mono { font-family: monospace; font-size: 0.8rem; }
-    .badge { display: inline-block; padding: 0.15rem 0.5rem;
-      border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
-    .badge-sent { background: #d4edda; color: #155724; }
-    .badge-pending { background: #fff3cd; color: #856404; }
-    .badge-failed { background: #f8d7da; color: #721c24; }
-    .badge-expired { background: #e2e3e5; color: #383d41; }
-    .badge-gone { background: #e2e3e5; color: #383d41; }
-    .empty { color: #999; font-style: italic; font-size: 0.85rem; }
-    #log { font-family: monospace; font-size: 0.8rem; white-space: pre-wrap;
-      word-break: break-all; background: #f8f9fa; border: 1px solid #e9ecef;
-      border-radius: 4px; padding: 0.75rem; max-height: 200px;
-      overflow-y: auto; margin-top: 0.5rem; }
-    </style>
-    </head>
-    <body>
-    <h1>Push Notifications</h1>
-    <div id="status" class="status info">Checking browser support...</div>
-    <div class="btn-row">
-    <button id="btn-sub" disabled>Subscribe this browser</button>
-    <button id="btn-unsub" disabled>Unsubscribe</button>
-    </div>
-    <fieldset>
-    <legend>Send notification</legend>
-    <label>Title</label>
-    <input id="n-title" value="Hello from Urbit">
-    <label>Body</label>
-    <textarea id="n-body" rows="2">This is a test notification</textarea>
-    <label>Icon URL (optional)</label>
-    <input id="n-icon" placeholder="https://...">
-    <label>Click URL (optional)</label>
-    <input id="n-url" placeholder="https://...">
-    <label>Tag (optional)</label>
-    <input id="n-tag" placeholder="e.g. chat-message">
-    <div style="margin-top:1rem">
-    <button id="btn-send">Send to all subscribers</button>
-    </div>
-    </fieldset>
-    <h2>VAPID Config</h2>
-    <div id="vapid-info" class="empty">Loading...</div>
-    <h2>Subscribers</h2>
-    <div id="subs-info"></div>
-    <h2>Delivery Log</h2>
-    <div id="sends-info"></div>
-    <details>
-    <summary style="cursor:pointer;font-size:0.9rem;margin-top:1rem">Debug Log</summary>
-    <div id="log"></div>
-    </details>
-    <script>
-    var P = "/apps/push/~web-pusher";
-    var logEl = document.getElementById("log");
-    var statusEl = document.getElementById("status");
-    var subBtn = document.getElementById("btn-sub");
-    var unsubBtn = document.getElementById("btn-unsub");
-    var sendBtn = document.getElementById("btn-send");
-    var swReg = null;
-    function log(msg) {
-      logEl.textContent += msg + "\n";
-      logEl.scrollTop = logEl.scrollHeight;
+    #install { display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1; padding: 2rem; text-align: center; }
+    #install h2 { margin-bottom: 1rem; }
+    #install p { margin-bottom: 0.5rem; color: #666; font-size: 0.9rem; }
+    #install button { margin-top: 1rem; padding: 0.75rem 1.5rem; border: 1px solid #ddd;
+      border-radius: 4px; background: #333; color: #fff; cursor: pointer; font-size: 0.9rem; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1a1a1a; color: #e0e0e0; }
+      header { border-bottom-color: #444; }
+      .header-left span { color: #777; }
+      .notif-label { border-color: #d4a820; color: #d4a820; }
+      .notif-label:hover { background: rgba(212,168,32,0.1); }
+      .notif-label:active { background: rgba(212,168,32,0.18); }
+      .notif-label:has(input:checked) { color: #777; }
+      .logout-btn:active { background: rgba(255,255,255,0.1); }
+      .logout-btn { color: #777; }
+      form { border-top-color: #444; }
+      form input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+      form button { background: #e0e0e0; color: #1a1a1a; border-color: #444; }
+      .msg .time { color: #777; }
+      #install p { color: #999; }
+      #install button { background: #e0e0e0; color: #1a1a1a; border-color: #444; }
     }
-    function setStatus(msg, cls) {
-      statusEl.textContent = msg;
-      statusEl.className = "status " + cls;
-    }
+    '''
+  ::
+  ++  page-js
+    ^-  @t
+    '''
+    var pollTimer = null;
+    var deferredPrompt = null;
+    var isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
     function urlB64ToUint8(b64) {
       var pad = "=".repeat((4 - b64.length % 4) % 4);
       var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
@@ -269,193 +280,196 @@
       for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
       return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
+    window.addEventListener("beforeinstallprompt", function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var btn = document.getElementById("install-btn");
+      if (btn) btn.style.display = "";
+    });
+    function doInstall() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
+    }
+    function init() {
+      document.getElementById("whoami").textContent = SENDER;
+      if (!isStandalone) {
+        document.getElementById("install").style.display = "flex";
+        var inst = document.getElementById("install-instructions");
+        if (/iPhone|iPad/.test(navigator.userAgent)) {
+          inst.textContent = "Tap the Share button, then 'Add to Home Screen'.";
+        } else if (/Android/.test(navigator.userAgent)) {
+          inst.textContent = "Tap the menu button, then 'Add to Home Screen' or 'Install App'.";
+        } else {
+          inst.textContent = "In Chrome, click the install icon in the address bar or use Menu > Install.";
+        }
+        return;
+      }
+      document.getElementById("app").style.display = "flex";
+      loadMessages();
+      pollTimer = setInterval(loadMessages, 3000);
+      initNotifState();
+    }
+    function loadMessages() {
+      fetch("/apps/push/messages")
+        .then(function(r) { return r.json(); })
+        .then(function(msgs) {
+          var el = document.getElementById("messages");
+          var wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+          el.innerHTML = "";
+          msgs.forEach(function(m) {
+            var d = document.createElement("div");
+            d.className = "msg";
+            var t = new Date(m["sent-at"]).toLocaleTimeString();
+            d.innerHTML = '<span class="author">' + esc(m.author) + '</span> ' +
+              '<span class="time">' + esc(t) + '</span>' +
+              '<div class="text">' + esc(m.text) + '</div>';
+            el.appendChild(d);
+          });
+          if (wasAtBottom) el.scrollTop = el.scrollHeight;
+        })
+        .catch(function() {});
+    }
     function esc(s) {
       var d = document.createElement("div");
       d.textContent = s;
       return d.innerHTML;
     }
-    function truncate(s, n) {
-      return s.length > n ? s.substring(0, n) + "..." : s;
+    function sendMsg(e) {
+      e.preventDefault();
+      var inp = document.getElementById("input");
+      var text = inp.value.trim();
+      if (!text) return false;
+      inp.value = "";
+      fetch("/apps/push/send", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text: text})
+      }).then(function() { loadMessages(); });
+      return false;
     }
-    function badgeClass(status) {
-      if (status === "sent") return "badge-sent";
-      if (status === "pending") return "badge-pending";
-      if (status === "failed") return "badge-failed";
-      return "badge-expired";
-    }
-    function loadState() {
-      fetch("/apps/push/state").then(function(r) { return r.json(); })
-      .then(function(st) {
-        var vi = document.getElementById("vapid-info");
-        if (st.config && st.config.sub) {
-          vi.innerHTML = '<table><tr><th>Contact</th>' +
-            '<td class="mono">' + esc(st.config.sub) + '</td></tr>' +
-            '<tr><th>Public Key</th>' +
-            '<td class="mono">' + esc(truncate(st.config["public-key"], 40)) +
-            '</td></tr></table>';
-        } else {
-          vi.innerHTML = '<span class="empty">Not configured</span>';
-        }
-        var si = document.getElementById("subs-info");
-        if (st.subs && st.subs.length > 0) {
-          var h = '<table><tr><th>Ship</th><th>ID</th><th>Endpoint</th></tr>';
-          st.subs.forEach(function(sub) {
-            h += '<tr><td class="mono">' + esc(sub.ship) +
-              '</td><td class="mono">' + esc(sub.id) +
-              '</td><td class="mono">' + esc(truncate(sub.endpoint, 50)) +
-              '</td></tr>';
-          });
-          si.innerHTML = h + '</table>';
-        } else {
-          si.innerHTML = '<span class="empty">No subscribers</span>';
-        }
-        var di = document.getElementById("sends-info");
-        if (st.sends && st.sends.length > 0) {
-          var h = '<table><tr><th>Time</th><th>Title</th>' +
-            '<th>Ship</th><th>Sub ID</th><th>Status</th></tr>';
-          st.sends.forEach(function(d) {
-            var t = new Date(d["sent-at"]).toLocaleString();
-            h += '<tr><td>' + esc(t) + '</td>' +
-              '<td>' + esc(d.title) + '</td>' +
-              '<td class="mono">' + esc(d.ship) + '</td>' +
-              '<td class="mono">' + esc(d["sub-id"]) + '</td>' +
-              '<td><span class="badge ' + badgeClass(d.status) + '">' +
-              esc(d.status) + '</span></td></tr>';
-          });
-          di.innerHTML = h + '</table>';
-        } else {
-          di.innerHTML = '<span class="empty">No notifications sent yet</span>';
-        }
-      }).catch(function(e) { log("State load error: " + e); });
-    }
-    async function init() {
+    async function initNotifState() {
+      var toggle = document.getElementById("notif-toggle");
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        setStatus("Push notifications not supported in this browser", "err");
-        return;
+        toggle.disabled = true;
+          return;
       }
       try {
-        swReg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
-        log("Service worker registered");
-        var sub = await swReg.pushManager.getSubscription();
+        var reg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
+        var sub = await reg.pushManager.getSubscription();
         if (sub) {
-          var cr = await fetch(P + "/check-sub", {
+          var cr = await fetch("/apps/push/~web-pusher/check-sub", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({endpoint: sub.endpoint})
           });
-          if (cr.ok) {
-            setStatus("This browser is subscribed", "ok");
-            unsubBtn.disabled = false;
-            log("Active subscription found");
-          } else {
+          toggle.checked = cr.ok;
+          if (!cr.ok) {
             await sub.unsubscribe();
             localStorage.removeItem("push-sub-id");
-            setStatus("This browser is not subscribed", "info");
-            subBtn.disabled = false;
-            log("Stale subscription cleared");
           }
-        } else {
-          setStatus("This browser is not subscribed", "info");
-          subBtn.disabled = false;
         }
-        loadState();
-      } catch(e) {
-        setStatus("Error: " + e.message, "err");
-        log("Init error: " + e);
-      }
+      } catch(e) {}
     }
-    subBtn.addEventListener("click", async function() {
+    async function toggleNotif(on) {
+      var toggle = document.getElementById("notif-toggle");
       try {
-        subBtn.disabled = true;
-        var resp = await fetch(P + "/vapid-key");
-        var vapidKey = await resp.text();
-        log("Got VAPID key");
-        var sub = await swReg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlB64ToUint8(vapidKey)
-        });
-        var p256dh = bufToB64Url(sub.getKey("p256dh"));
-        var auth = bufToB64Url(sub.getKey("auth"));
-        var id = "b-" + Date.now();
-        var r = await fetch(P + "/subscribe", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({id: id, endpoint: sub.endpoint,
-            p256dh: p256dh, auth: auth})
-        });
-        if (!r.ok) throw new Error("Server returned " + r.status);
-        localStorage.setItem("push-sub-id", id);
-        setStatus("This browser is subscribed", "ok");
-        unsubBtn.disabled = false;
-        log("Subscribed with id: " + id);
-        loadState();
-      } catch(e) {
-        setStatus("Subscribe failed: " + e.message, "err");
-        subBtn.disabled = false;
-        log("Subscribe error: " + e);
-      }
-    });
-    unsubBtn.addEventListener("click", async function() {
-      try {
-        unsubBtn.disabled = true;
-        var sub = await swReg.pushManager.getSubscription();
-        if (sub) await sub.unsubscribe();
-        var id = localStorage.getItem("push-sub-id");
-        if (id) {
-          await fetch(P + "/unsubscribe", {
+        var reg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
+        if (on) {
+          var resp = await fetch("/apps/push/~web-pusher/vapid-key");
+          var vapidKey = await resp.text();
+          var sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8(vapidKey)
+          });
+          var p256dh = bufToB64Url(sub.getKey("p256dh"));
+          var auth = bufToB64Url(sub.getKey("auth"));
+          var id = "b-" + Date.now();
+          var r = await fetch("/apps/push/~web-pusher/subscribe", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({id: id})
+            body: JSON.stringify({id: id, endpoint: sub.endpoint, p256dh: p256dh, auth: auth})
           });
-          localStorage.removeItem("push-sub-id");
-        }
-        setStatus("This browser is not subscribed", "info");
-        subBtn.disabled = false;
-        log("Unsubscribed");
-        loadState();
-      } catch(e) {
-        setStatus("Unsubscribe error: " + e.message, "err");
-        unsubBtn.disabled = false;
-        log("Error: " + e);
-      }
-    });
-    sendBtn.addEventListener("click", async function() {
-      var msg = {
-        title: document.getElementById("n-title").value,
-        body: document.getElementById("n-body").value
-      };
-      var icon = document.getElementById("n-icon").value;
-      var url = document.getElementById("n-url").value;
-      var tag = document.getElementById("n-tag").value;
-      if (icon) msg.icon = icon;
-      if (url) msg.url = url;
-      if (tag) msg.tag = tag;
-      try {
-        sendBtn.disabled = true;
-        var r = await fetch("/apps/push/send", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(msg)
-        });
-        if (r.ok) {
-          log("Notification sent to all subscribers");
-          setTimeout(loadState, 1000);
+          if (!r.ok) throw new Error("subscribe failed");
+          localStorage.setItem("push-sub-id", id);
+          reg.showNotification("notifications enabled");
         } else {
-          var t = await r.text();
-          log("Send failed: " + r.status + " " + t);
+          var sub = await reg.pushManager.getSubscription();
+          if (sub) await sub.unsubscribe();
+          var id = localStorage.getItem("push-sub-id");
+          if (id) {
+            await fetch("/apps/push/~web-pusher/unsubscribe", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({id: id})
+            });
+            localStorage.removeItem("push-sub-id");
+          }
         }
       } catch(e) {
-        log("Send error: " + e);
-      } finally {
-        sendBtn.disabled = false;
+        toggle.checked = !on;
       }
-    });
+    }
     init();
-    setInterval(loadState, 5000);
-    </script>
-    </body>
-    </html>
     '''
+  ::
+  ++  do-send
+    |=  [eyre-id=@ta sender=@p body=(unit octs)]
+    ^-  (quip card _this)
+    ?~  body  :_(this (err-cards eyre-id 400 'no body'))
+    =/  jon=(unit json)  (de:json:html q.u.body)
+    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    =/  obj  p.u.jon
+    =/  text-j  (~(get by obj) 'text')
+    ?.  ?&(?=(^ text-j) ?=(%s -.u.text-j))
+      :_(this (err-cards eyre-id 400 'text required'))
+    ?:  (gth (met 3 p.u.text-j) 1.024)
+      :_(this (err-cards eyre-id 400 'message too long'))
+    =/  msg=message:groupchat  [sender p.u.text-j now.bowl]
+    =.  msgs.state  (scag 200 `(list message:groupchat)`[msg msgs.state])
+    =/  sender-t  (trip (scot %p sender))
+  =/  full  "{sender-t}: {(trip p.u.text-j)}"
+  =/  title=@t
+    ?:  (lte (lent full) 80)  (crip full)
+    (crip (weld (scag 77 full) "..."))
+  =/  push-msg  [title '' ~ `'/apps/push' `'message']
+    :_  this
+    :*  [%pass /notify %agent [our dap]:bowl %poke %push-send !>([*(set @p) push-msg])]
+        (ok-cards eyre-id)
+    ==
+  ::
+  ++  get-messages
+    |=  eyre-id=@ta
+    ^-  (list card)
+    ::  state is newest-first, reverse for display (oldest-first)
+    ::
+    =/  msgs  (flop msgs.state)
+    =/  arr=json
+      :-  %a
+      %+  turn  msgs
+      |=  m=message:groupchat
+      %-  pairs:enjs:format
+      :~  ['author' [%s (scot %p author.m)]]
+          ['text' [%s text.m]]
+          ['sent-at' [%n (crip (a-co:co (mul 1.000 (unm:chrono:userlib sent-at.m))))]]
+      ==
+    %+  give-simple-payload:app:server  eyre-id
+    (json-response:gen:server arr)
+  ::
+  ++  ok-cards
+    |=  eyre-id=@ta
+    ^-  (list card)
+    %+  give-simple-payload:app:server  eyre-id
+    %-  json-response:gen:server
+    [%o (~(gas by *(map @t json)) ~[['ok' [%b &]]])]
+  ::
+  ++  err-cards
+    |=  [eyre-id=@ta code=@ud msg=@t]
+    ^-  (list card)
+    =/  bod=json  [%o (~(gas by *(map @t json)) ~[['error' [%s msg]]])]
+    %+  give-simple-payload:app:server  eyre-id
+    [[code [['content-type' 'application/json'] ~]] `(json-to-octs:server bod)]
   --
 ::
 ++  on-watch

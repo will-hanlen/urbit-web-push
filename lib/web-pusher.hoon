@@ -120,15 +120,11 @@
     try { data = event.data.json(); } catch(e) {}
     var tag = data.tag || "";
     event.waitUntil(
-      (tag ? self.registration.getNotifications() : Promise.resolve([]))
+      (tag ? self.registration.getNotifications({tag: tag}) : Promise.resolve([]))
       .then(function(all) {
         var count = 1;
-        for (var i = 0; i < all.length; i++) {
-          if (all[i].tag && all[i].tag.indexOf(tag + "-") === 0) {
-            var c = all[i].data && all[i].data.count;
-            if (c) count = c + 1;
-            all[i].close();
-          }
+        if (all.length > 0 && all[0].data && all[0].data.count) {
+          count = all[0].data.count + 1;
         }
         var title = data.title;
         var body = data.body || "";
@@ -138,7 +134,8 @@
         return self.registration.showNotification(title, {
           body: body,
           icon: data.icon || "",
-          tag: tag + "-" + Date.now(),
+          tag: tag,
+          renotify: true,
           data: {url: data.url || "", count: count}
         });
       })
@@ -233,7 +230,7 @@
       (js-response:gen:server default-sw-js)
     ::  all other push routes require authentication
     ::
-    ?.  authenticated.inbound-request
+    ?.  |(authenticated.inbound-request (lte (met 3 src.bowl) 4))
       :_  this
       (err-cards:hep eyre-id 403 'not authenticated')
     =^  cards  pstate
