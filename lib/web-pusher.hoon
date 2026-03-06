@@ -127,6 +127,8 @@
     |=  [=mark =vase]
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=(%push-send mark)
+      ?.  =(our src):bowl
+        ~|(%push-send-permission-denied !!)
       =/  [ships=(set @p) msg=push-message]
         !<([(set @p) push-message] vase)
       =^  cards  pstate  (send-to-ships:hep ships msg)
