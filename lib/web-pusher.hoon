@@ -361,6 +361,12 @@
           (err-cards eyre-id 500 'not configured')
         %+  give-simple-payload:app:server  eyre-id
         [[200 [['content-type' 'text/plain'] ~]] `(as-octs:mimes:html vapid-pub-b64)]
+      ?:  =(site /debug)
+        ?.  =(our src):bowl
+          (err-cards eyre-id 403 'owner only')
+        %+  give-simple-payload:app:server  eyre-id
+        %-  html-response:gen:server
+        (as-octs:mimes:html (crip (welp "<!DOCTYPE html>" (en-xml:html debug-page))))
       (give-simple-payload:app:server eyre-id not-found:gen:server)
     ?:  =('POST' method)
       ?:  =(site /subscribe)
@@ -423,6 +429,162 @@
     pstate(subs (~(put by subs.pstate) src.bowl new-inner))
   ::
   ::
+  ::
+  ++  debug-page
+    ^-  manx
+    =/  sub-list=(list [@p (map @ta subscription)])
+      ~(tap by subs.pstate)
+    =/  send-list=(list delivery)  sends.pstate
+    ::  build config section content
+    ::
+    =/  config-body=manx
+      ?~  config.pstate
+        ;p: not configured
+      ;table
+        ;tr
+          ;td: subject
+          ;td: {(trip sub.u.config.pstate)}
+        ==
+        ;tr
+          ;td: public key
+          ;td: {(trip vapid-pub-b64)}
+        ==
+      ==
+    ::  build subscription items
+    ::
+    =/  sub-items=(list manx)
+      ?~  sub-list
+        :~  ;p: no subscriptions
+        ==
+      %+  turn  sub-list
+      |=  [=ship inner=(map @ta subscription)]
+      ^-  manx
+      =/  inl=(list [@ta subscription])  ~(tap by inner)
+      =/  sub-rows=(list manx)
+        %+  turn  inl
+        |=  [id=@ta sub=subscription]
+        ^-  manx
+        ;details
+          ;summary: {(trip id)}
+          ;table
+            ;tr
+              ;td: endpoint
+              ;td: {(trip endpoint.sub)}
+            ==
+            ;tr
+              ;td: p256dh
+              ;td(class "muted"): {(scow %ux p256dh.sub)}
+            ==
+            ;tr
+              ;td: auth
+              ;td(class "muted"): {(scow %ux auth.sub)}
+            ==
+          ==
+        ==
+      ;details
+        ;summary: {(scow %p ship)} ({(scow %ud (lent inl))} browsers)
+        ;*  sub-rows
+      ==
+    ::  build delivery rows
+    ::
+    =/  sends-body=manx
+      ?~  send-list
+        ;p: no deliveries
+      ;table
+        ;tr
+          ;th: ship
+          ;th: sub
+          ;th: title
+          ;th: time
+          ;th: status
+        ==
+        ;*  %+  turn  send-list
+            |=  d=delivery
+            ^-  manx
+            ;tr
+              ;td: {(scow %p ship.d)}
+              ;td: {(trip sub-id.d)}
+              ;td: {(trip title.d)}
+              ;td: {(scow %da sent-at.d)}
+              ;td(class "{(trip delivery-status.d)}"): {(trip delivery-status.d)}
+            ==
+      ==
+    ::  assemble page
+    ::
+    =/  css=@t
+      '''
+      body {
+        font-family: monospace;
+        max-width: 960px;
+        margin: 2em auto;
+        padding: 0 1em;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: bold;
+        padding: 0.3em 0;
+      }
+      details {
+        margin-left: 1em;
+        border-left: 2px solid #ccc;
+        padding-left: 1em;
+      }
+      table {
+        border-collapse: collapse;
+        margin: 0.5em 0;
+        width: 100%;
+      }
+      td, th {
+        text-align: left;
+        padding: 0.2em 1em 0.2em 0;
+      }
+      td {
+        overflow-wrap: anywhere;
+        word-break: break-all;
+      }
+      .pending { color: #a80; }
+      .sent { color: #080; }
+      .failed { color: #c00; }
+      .expired { color: #888; }
+      .gone { color: #c00; font-style: italic; }
+      .muted { color: #888; }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1a1a1a;
+          color: #ddd;
+        }
+        details {
+          border-left-color: #555;
+        }
+        .pending { color: #db2; }
+        .sent { color: #4b4; }
+        .failed { color: #f66; }
+        .expired { color: #999; }
+        .gone { color: #f66; }
+        .muted { color: #999; }
+      }
+      '''
+    ;html
+      ;head
+        ;title: web-pusher debug
+        ;+  ;style: {(trip css)}
+      ==
+      ;body
+        ;h1: web-pusher debug
+        ;details(open "")
+          ;summary: config
+          ;+  config-body
+        ==
+        ;details(open "")
+          ;summary: subscriptions ({(scow %ud (lent sub-list))} ships)
+          ;*  sub-items
+        ==
+        ;details(open "")
+          ;summary: deliveries ({(scow %ud (lent send-list))})
+          ;+  sends-body
+        ==
+      ==
+    ==
   ::
   ++  trim-sends
     |=  s=(list delivery)
