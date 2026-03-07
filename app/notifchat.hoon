@@ -94,9 +94,7 @@
   =/  meth=@t  method.request.inbound-request
   =/  action  (~(gut by pams) 'action' '')
   =/  who  src.bowl
-  =/  planet-plus  (lte (met 3 who) 8)
-  =/  allowed
-    |(authenticated.inbound-request planet-plus)
+  =/  allowed  authenticated.inbound-request
   ::  public routes
   ::
   ?:  &(=('GET' meth) =(/apps/notifchat/'icon.svg' site))
