@@ -69,8 +69,11 @@
 ::  The wrapper also intercepts:
 ::
 ::    - Arvo responses on /web-pusher/** wires (iris callbacks)
-::    - Pokes with mark %push-send: [(set @p) push-message]
-::      If the set is empty, sends to all ships (broadcast).
+::    - Pokes with mark %push-send: push-send
+::      targets: specific ships (empty = all subscribed)
+::      tags: filter by user prefs (empty = no filtering)
+::      exclude: remove these ships from recipients
+::      Ships with no prefs or empty prefs receive all notifications.
 ::    - Peeks on /web-pusher/**:
 ::
 ::        /u/web-pusher          -- loob, always %.y
@@ -80,10 +83,18 @@
 ::
 ::  The inner agent triggers notifications by poking itself:
 ::
-::    =/  target  [(set @p) push-message]
-::    [%pass /notify %agent [our dap]:bowl %poke %push-send !>(target)]
+::    =/  =push-send  [targets=~ tags=`(set term)`(sy %chat ~) exclude=(sy src.bowl ~) msg]
+::    [%pass /notify %agent [our dap]:bowl %poke %push-send !>(push-send)]
 ::
-::  Pass ~ (empty set) to broadcast to all ships.
+::  Pass ~ for targets to broadcast, ~ for tags to skip filtering.
+::  Ships with no prefs or empty prefs receive all notifications.
+::
+::    GET  {base}/~web-pusher/prefs       -- user's tag preferences
+::    POST {base}/~web-pusher/prefs       -- update tag preferences
+::
+::  POST /prefs body (JSON):
+::    { "tags": ["chat", "dm"] }
+::  Empty array means receive all notifications.
 ::
 /-  push
 /+  web-push, server
@@ -198,9 +209,8 @@
     ^-  (quip card:agent:gall agent:gall)
     ?:  ?=(%push-send mark)
       ?>  =(our src):bowl
-      =/  [ships=(set @p) msg=push-message]
-        !<([(set @p) push-message] vase)
-      =^  cards  pstate  (send-to-ships:hep ships msg)
+      =/  =push-send  !<(push-send vase)
+      =^  cards  pstate  (send-to-ships:hep push-send)
       [cards this]
     ::
     ?.  ?=(%handle-http-request mark)
@@ -315,14 +325,29 @@
     (~(en base64:mimes:html | &) [65 (rev 3 65 public-key.u.config.pstate)])
   ::
   ++  send-to-ships
-    |=  [ships=(set @p) msg=push-message]
+    |=  =push-send
     ^-  (quip card:agent:gall pusher-state)
     ?~  config.pstate  ~|(%push-not-configured !!)
-    ::  empty set means broadcast to all ships
+    =/  msg  msg.push-send
+    ::  step 1: candidates from targets (empty = all subscribed)
     ::
     =/  targets=(set @p)
-      ?:  =(~ ships)  ~(key by subs.pstate)
-      ships
+      ?:  =(~ targets.push-send)  ~(key by subs.pstate)
+      targets.push-send
+    ::  step 2: filter by tag prefs (empty tags = no filtering)
+    ::  ships with no prefs or empty prefs receive all notifications
+    ::
+    =.  targets
+      ?:  =(~ tags.push-send)  targets
+      %-  ~(rep in targets)
+      |=  [=ship acc=(set @p)]
+      =/  sp  (~(get by prefs.pstate) ship)
+      ?:  |(?=(~ sp) =(~ u.sp))  (~(put in acc) ship)
+      ?:  =(~ (~(int in u.sp) tags.push-send))  acc
+      (~(put in acc) ship)
+    ::  step 3: remove excluded ships
+    ::
+    =.  targets  (~(dif in targets) exclude.push-send)
     =/  payload=octs  (message-to-json:web-push msg)
     =/  exp=@ud  (add (unt:chrono:userlib now.bowl) 86.400)
     ::  collect all [ship id subscription] triples
@@ -400,6 +425,14 @@
   ++  handle-http
     |=  [eyre-id=@ta site=path method=@t body=(unit octs)]
     ^-  (quip card:agent:gall pusher-state)
+    ?:  &(=('GET' method) =(site /prefs))
+      =/  sp=(set term)  (~(gut by prefs.pstate) src.bowl ~)
+      =/  arr=json  [%a (turn ~(tap in sp) |=(t=term [%s t]))]
+      :_  pstate
+      %+  give-simple-payload:app:server  eyre-id
+      (json-response:gen:server arr)
+    ?:  &(=('POST' method) =(site /prefs))
+      (do-prefs eyre-id body)
     ?:  =('GET' method)
       :_  pstate
       ?:  =(site /vapid-key)
@@ -499,7 +532,28 @@
       (ok-cards eyre-id)
     (err-cards eyre-id 404 'subscription not found')
   ::
-  ::
+  ++  do-prefs
+    |=  [eyre-id=@ta body=(unit octs)]
+    ^-  (quip card:agent:gall pusher-state)
+    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
+    =/  jon=(unit json)  (de:json:html q.u.body)
+    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
+    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
+    =/  tags-j  (~(get by p.u.jon) 'tags')
+    ?~  tags-j  [(err-cards eyre-id 400 'missing tags') pstate]
+    ?.  ?=(%a -.u.tags-j)  [(err-cards eyre-id 400 'tags must be array') pstate]
+    =/  tags=(set term)
+      %-  ~(gas in *(set term))
+      %+  murn  p.u.tags-j
+      |=  j=json
+      ?.  ?=(%s -.j)  ~
+      `p.j
+    ::  empty tags = receive all, remove entry
+    ::
+    :-  (ok-cards eyre-id)
+    ?:  =(~ tags)
+      pstate(prefs (~(del by prefs.pstate) src.bowl))
+    pstate(prefs (~(put by prefs.pstate) src.bowl tags))
   ::
   ++  debug-page
     ^-  manx
@@ -536,6 +590,13 @@
       |=  [=ship inner=(map @ta subscription)]
       ^-  manx
       =/  inl=(list [@ta subscription])  ~(tap by inner)
+      =/  sp=(set term)  (~(gut by prefs.pstate) ship ~)
+      =/  prefs-text=tape
+        ?:  =(~ sp)  "all"
+        %-  zing
+        ^-  (list tape)
+        %+  join  ", "
+        (turn ~(tap in sp) |=(t=term (trip t)))
       =/  sub-rows=(list manx)
         %+  turn  inl
         |=  [id=@ta sub=subscription]
@@ -558,7 +619,7 @@
           ==
         ==
       ;details
-        ;summary: {(scow %p ship)} ({(scow %ud (lent inl))} browsers)
+        ;summary: {(scow %p ship)} ({(scow %ud (lent inl))} browsers, prefs: {prefs-text})
         ;*  sub-rows
       ==
     ::  build delivery rows
