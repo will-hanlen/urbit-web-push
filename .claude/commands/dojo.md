@@ -1,6 +1,6 @@
 Send a command to the fake ~zod's dojo and return its output.
 
-Takes one argument: the dojo command to run (e.g. `|commit %push`, `|rein %push [& %push]`).
+Takes one argument: the dojo command to run (e.g. `|commit %web-push`, `|rein %web-push [& %notifchat]`).
 
 The fakezod should be running in a tmux session:window called `web-push:zod`.
 

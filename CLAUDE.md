@@ -4,26 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An Urbit desk (`%push`) implementing W3C Web Push (RFC 8291/8292) entirely in Hoon. Provides VAPID authentication, ECDH key agreement, HKDF key derivation, AES-128-GCM encryption, and a demo agent with a browser UI for sending push notifications.
+An Urbit desk (`%web-push`) implementing W3C Web Push (RFC 8291/8292) entirely in Hoon. Provides VAPID authentication, ECDH key agreement, HKDF key derivation, AES-128-GCM encryption, and a demo agent with a browser UI for sending push notifications.
 
 ## Development Workflow
 
-A fake ~zod should be running in tmux session `web-push:zod` with the `%push` desk mounted at `./zod/push/`.
+A fake ~zod should be running in tmux session `web-push:zod` with the `%web-push` desk mounted at `./zod/web-push/`.
 
 **Compile and test changes:**
-Use the `/commit` skill to rsync source into the pier and `|commit %push`.
+Use the `/commit` skill to rsync source into the pier and `|commit %web-push`.
 
 **Run a dojo command:**
-Use the `/dojo` skill (e.g., `/dojo -test /=push=/tests`).
+Use the `/dojo` skill (e.g., `/dojo -test /=web-push=/tests`).
 
 **Run a single test file:**
 ```
-/dojo -test /=push=/tests/lib/jwt/hoon
+/dojo -test /=web-push=/tests/lib/jwt/hoon
 ```
 
 **Check a single file compiles:**
 ```
-/dojo -build-file %/lib/web-push/hoon
+/dojo -build-file /=web-push=/lib/web-push/hoon
 ```
 
 ## Architecture
@@ -60,4 +60,4 @@ The wrapper intercepts this, encrypts, and delivers via iris.
 ### Desk metadata
 - Kelvin: `[%zuse 413]`
 - Ship: `~zod`
-- Single agent: `%push`
+- Single agent: `%notifchat`

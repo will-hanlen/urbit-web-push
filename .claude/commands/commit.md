@@ -1,19 +1,19 @@
-Update the fake ~zod's mounted %push desk.
+Update the fake ~zod's mounted %web-push desk.
 
 The fakezod should be running in a tmux session:window called `web-push:zod`.
 
-The fakezod should have its %push desk mounted at `./zod/push`.
+The fakezod should have its %web-push desk mounted at `./zod/web-push`.
 
 ## Steps
 
-1. **Update the pier's mounted %push desk**: rsync the source tree into the pier's mounted desk:
+1. **Update the pier's mounted %web-push desk**: rsync the source tree into the pier's mounted desk:
    ```
-   rsync -aL . zod/push/ --exclude='.git' --exclude='.claude' --exclude='zod'
+   rsync -aL . zod/web-push/ --exclude='.git' --exclude='.claude' --exclude='zod'
    ```
 
 2. **Commit the desk:** Execute `tmux-dojo` with the pier:
    ```
-   tmux-dojo "web-push:zod" 240 "|commit %push"
+   tmux-dojo "web-push:zod" 240 "|commit %web-push"
    ```
    - stdout = dojo output (between command echo and final prompt)
    - stderr = OK or TIMEOUT

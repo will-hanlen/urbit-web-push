@@ -27,10 +27,10 @@ app/push.hoon          -- Demo agent: serves UI, handles /send endpoint
 Install on your ship from the distributor, or copy the desk manually:
 
 ```
-|install ~zod %push
+|install ~zod %web-push
 ```
 
-Once installed, the app is available at `http://your-ship/apps/push`.
+Once installed, the app is available at `http://your-ship/apps/notifchat`.
 
 ## Usage
 
@@ -111,14 +111,14 @@ If you need more control, use `lib/web-push` directly:
 
 ## Development
 
-Requires a running fake `~zod`. The desk source lives in the repo root and is synced into the pier at `zod/push/`.
+Requires a running fake `~zod`. The desk source lives in the repo root and is synced into the pier at `zod/web-push/`.
 
 ```bash
 # Run tests
--test /=push=/tests
+-test /=web-push=/tests
 
 # Run a specific test
--test /=push=/tests/lib/jwt/hoon
+-test /=web-push=/tests/lib/jwt/hoon
 
 # Check a file compiles
 -build-file %/lib/web-push/hoon
