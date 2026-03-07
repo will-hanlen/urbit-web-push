@@ -1,10 +1,10 @@
 :~
-  title+'Groupchat'
+  title+'Notifchat'
   info+'Minimal groupchat with push notifications'
   color+0xf0.be41
   version+[0 1 0]
   website+'https://github.com/willbach/urbit-web-push'
   license+'MIT'
-  base+'push'
-  site+/apps/push
+  base+'notifchat'
+  site+/apps/notifchat
 ==

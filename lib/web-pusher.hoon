@@ -230,7 +230,7 @@
       (js-response:gen:server default-sw-js)
     ::  all other push routes require authentication
     ::
-    ?.  |(authenticated.inbound-request (lte (met 3 src.bowl) 4))
+    ?.  |(authenticated.inbound-request (lte (met 3 src.bowl) 8))
       :_  this
       (err-cards:hep eyre-id 403 'not authenticated')
     =^  cards  pstate

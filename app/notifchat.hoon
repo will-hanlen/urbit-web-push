@@ -1,9 +1,9 @@
-::  app/push: groupchat with push notifications
+::  app/notifchat: notifchat with push notifications
 ::
 ::  Wrapped by web-pusher for VAPID keys, browser
 ::  subscriptions, encryption, and delivery tracking.
 ::
-/-  groupchat
+/-  notifchat
 /+  web-pusher, default-agent, verb, server
 ::
 |%
@@ -12,7 +12,7 @@
   $%  [%0 state-0]
   ==
 +$  state-0
-  $:  msgs=(list message:groupchat)
+  $:  msgs=(list message:notifchat)
   ==
 --
 ::
@@ -21,7 +21,7 @@
 ::
 %+  verb  |
 %-  %:  agent:web-pusher
-      /apps/push
+      /apps/notifchat
       'mailto:you@example.com'
       %.y
       200
@@ -49,21 +49,21 @@
   =/  site=path  site.rl
   =/  meth=@t  method.request.inbound-request
   =/  sender  src.bowl
-  =/  planet-plus  (lte (met 3 sender) 4)
+  =/  planet-plus  (lte (met 3 sender) 8)
   =/  allowed  |(authenticated.inbound-request planet-plus)
   ::  manifest is public
   ::
-  ?:  &(=('GET' meth) =(/apps/push/icon site.rl))
+  ?:  &(=('GET' meth) =(/apps/notifchat/icon site.rl))
     :_  this
     %+  give-simple-payload:app:server  eyre-id
     (icon-response)
-  ?:  &(=('GET' meth) =(/apps/push/manifest site.rl))
+  ?:  &(=('GET' meth) =(/apps/notifchat/manifest site.rl))
     :_  this
     %+  give-simple-payload:app:server  eyre-id
     (manifest-response)
   ::  main page
   ::
-  ?:  &(=('GET' meth) =(site /apps/push))
+  ?:  &(=('GET' meth) =(site /apps/notifchat))
     :_  this
     %+  give-simple-payload:app:server  eyre-id
     ?:  allowed
@@ -75,9 +75,9 @@
     :_  this
     (err-cards eyre-id 403 'not allowed')
   ::
-  ?:  &(=('POST' meth) =(site /apps/push/send))
+  ?:  &(=('POST' meth) =(site /apps/notifchat/send))
     (do-send eyre-id sender body.request.inbound-request)
-  ?:  &(=('GET' meth) =(site /apps/push/messages))
+  ?:  &(=('GET' meth) =(site /apps/notifchat/messages))
     :_  this
     (get-messages eyre-id)
   :_  this
@@ -88,7 +88,7 @@
     ^-  simple-payload:http
     =/  bod=@t
       '''
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#f0be41"/><text x="256" y="340" text-anchor="middle" font-size="280" font-family="system-ui,sans-serif" fill="#1a1a1a">gc</text></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#f0be41"/><text x="256" y="340" text-anchor="middle" font-size="280" font-family="system-ui,sans-serif" fill="#1a1a1a">nc</text></svg>
       '''
     [[200 [['content-type' 'image/svg+xml'] ~]] `(as-octs:mimes:html bod)]
   ::
@@ -97,7 +97,7 @@
     ^-  simple-payload:http
     =/  bod=@t
       '''
-      {"name":"Groupchat","short_name":"Groupchat","start_url":"/apps/push","display":"standalone","background_color":"#ffffff","theme_color":"#333333","icons":[{"src":"/apps/push/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+      {"name":"Notifchat","short_name":"Notifchat","start_url":"/apps/notifchat","display":"standalone","background_color":"#ffffff","theme_color":"#333333","icons":[{"src":"/apps/notifchat/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
       '''
     [[200 [['content-type' 'application/manifest+json'] ~]] `(as-octs:mimes:html bod)]
   ::
@@ -123,13 +123,13 @@
       ;head
         ;meta(charset "utf-8");
         ;meta(name "viewport", content "width=device-width, initial-scale=1");
-        ;title: Groupchat
+        ;title: Notifchat
         ;+  ;style: {(trip login-css)}
       ==
       ;body
-        ;h1: Groupchat
+        ;h1: Notifchat
         ;p: Sign in with a planet or star
-        ;a(href "/~/login?redirect=/apps/push"): Sign In
+        ;a(href "/~/login?redirect=/apps/notifchat"): Sign In
       ==
     ==
     ==
@@ -158,8 +158,8 @@
     ;head
       ;meta(charset "utf-8");
       ;meta(name "viewport", content "width=device-width, initial-scale=1");
-      ;title: Groupchat
-      ;link(rel "manifest", href "/apps/push/manifest.json");
+      ;title: Notifchat
+      ;link(rel "manifest", href "/apps/notifchat/manifest.json");
       ;meta(name "apple-mobile-web-app-capable", content "yes");
       ;+  ;style: {(trip css)}
     ==
@@ -169,16 +169,16 @@
     ;div(id "app", style "display:none;flex-direction:column;height:100vh;height:100dvh")
       ;header
         ;div(class "header-left")
-          ;h1: groupchat
+          ;h1: notifchat
           ;span(id "whoami");
         ==
         ;div(class "header-right")
           ;label(class "notif-label", id "notif-label")
             ;input(type "checkbox", id "notif-toggle", onchange "toggleNotif(this.checked)");
             ;span(class "notif-off"): turn on notifs
-            ;span(class "notif-on"): notifs on
+            ;span(class "notif-on"): notifs on!
           ==
-          ;a(href "/~/logout", class "logout-btn"): logout
+          ;a(href "/~/logout?redirect=/apps/notifchat", class "logout-btn"): logout
         ==
       ==
       ;div(id "messages");
@@ -191,8 +191,8 @@
   ++  install-div
     ^-  manx
     ;div(id "install", style "display:none")
-      ;h2: Install Groupchat
-      ;p: This app works best as an installed PWA.
+      ;h2: Install Notifchat
+      ;p: To use this app, install it.
       ;p(id "install-instructions");
       ;button(id "install-btn", style "display:none", onclick "doInstall()"): Install App
     ==
@@ -266,7 +266,6 @@
     '''
     var pollTimer = null;
     var deferredPrompt = null;
-    var isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
     function urlB64ToUint8(b64) {
       var pad = "=".repeat((4 - b64.length % 4) % 4);
       var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
@@ -291,27 +290,37 @@
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
     }
-    function init() {
-      document.getElementById("whoami").textContent = SENDER;
-      if (!isStandalone) {
-        document.getElementById("install").style.display = "flex";
-        var inst = document.getElementById("install-instructions");
-        if (/iPhone|iPad/.test(navigator.userAgent)) {
-          inst.textContent = "Tap the Share button, then 'Add to Home Screen'.";
-        } else if (/Android/.test(navigator.userAgent)) {
-          inst.textContent = "Tap the menu button, then 'Add to Home Screen' or 'Install App'.";
-        } else {
-          inst.textContent = "In Chrome, click the install icon in the address bar or use Menu > Install.";
-        }
-        return;
-      }
+    function checkStandalone() {
+      return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    }
+    function startApp() {
+      document.getElementById("install").style.display = "none";
       document.getElementById("app").style.display = "flex";
       loadMessages();
       pollTimer = setInterval(loadMessages, 3000);
       initNotifState();
     }
+    function init() {
+      document.getElementById("whoami").textContent = SENDER;
+      if (checkStandalone()) {
+        startApp();
+        return;
+      }
+      document.getElementById("install").style.display = "flex";
+      var inst = document.getElementById("install-instructions");
+      if (/iPhone|iPad/.test(navigator.userAgent)) {
+        inst.textContent = "Tap the Share button, then 'Add to Home Screen'.";
+      } else if (/Android/.test(navigator.userAgent)) {
+        inst.textContent = "Tap the menu button, then 'Add to Home Screen' or 'Install App'.";
+      } else {
+        inst.textContent = "In Chrome, click the install icon in the address bar or use Menu > Install.";
+      }
+      setInterval(function() {
+        if (checkStandalone()) startApp();
+      }, 100);
+    }
     function loadMessages() {
-      fetch("/apps/push/messages")
+      fetch("/apps/notifchat/messages")
         .then(function(r) { return r.json(); })
         .then(function(msgs) {
           var el = document.getElementById("messages");
@@ -341,7 +350,7 @@
       var text = inp.value.trim();
       if (!text) return false;
       inp.value = "";
-      fetch("/apps/push/send", {
+      fetch("/apps/notifchat/send", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({text: text})
@@ -355,10 +364,10 @@
           return;
       }
       try {
-        var reg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
+        var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
         var sub = await reg.pushManager.getSubscription();
         if (sub) {
-          var cr = await fetch("/apps/push/~web-pusher/check-sub", {
+          var cr = await fetch("/apps/notifchat/~web-pusher/check-sub", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({endpoint: sub.endpoint})
@@ -374,9 +383,9 @@
     async function toggleNotif(on) {
       var toggle = document.getElementById("notif-toggle");
       try {
-        var reg = await navigator.serviceWorker.register("/apps/push/~web-pusher/sw.js");
+        var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
         if (on) {
-          var resp = await fetch("/apps/push/~web-pusher/vapid-key");
+          var resp = await fetch("/apps/notifchat/~web-pusher/vapid-key");
           var vapidKey = await resp.text();
           var sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
@@ -385,7 +394,7 @@
           var p256dh = bufToB64Url(sub.getKey("p256dh"));
           var auth = bufToB64Url(sub.getKey("auth"));
           var id = "b-" + Date.now();
-          var r = await fetch("/apps/push/~web-pusher/subscribe", {
+          var r = await fetch("/apps/notifchat/~web-pusher/subscribe", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({id: id, endpoint: sub.endpoint, p256dh: p256dh, auth: auth})
@@ -398,7 +407,7 @@
           if (sub) await sub.unsubscribe();
           var id = localStorage.getItem("push-sub-id");
           if (id) {
-            await fetch("/apps/push/~web-pusher/unsubscribe", {
+            await fetch("/apps/notifchat/~web-pusher/unsubscribe", {
               method: "POST",
               headers: {"Content-Type": "application/json"},
               body: JSON.stringify({id: id})
@@ -426,14 +435,14 @@
       :_(this (err-cards eyre-id 400 'text required'))
     ?:  (gth (met 3 p.u.text-j) 1.024)
       :_(this (err-cards eyre-id 400 'message too long'))
-    =/  msg=message:groupchat  [sender p.u.text-j now.bowl]
-    =.  msgs.state  (scag 200 `(list message:groupchat)`[msg msgs.state])
+    =/  msg=message:notifchat  [sender p.u.text-j now.bowl]
+    =.  msgs.state  (scag 200 `(list message:notifchat)`[msg msgs.state])
     =/  sender-t  (trip (scot %p sender))
   =/  full  "{sender-t}: {(trip p.u.text-j)}"
   =/  title=@t
     ?:  (lte (lent full) 80)  (crip full)
     (crip (weld (scag 77 full) "..."))
-  =/  push-msg  [title '' ~ `'/apps/push' `'message']
+  =/  push-msg  [title '' ~ `'/apps/notifchat' `'message']
     :_  this
     :*  [%pass /notify %agent [our dap]:bowl %poke %push-send !>([*(set @p) push-msg])]
         (ok-cards eyre-id)
@@ -448,7 +457,7 @@
     =/  arr=json
       :-  %a
       %+  turn  msgs
-      |=  m=message:groupchat
+      |=  m=message:notifchat
       %-  pairs:enjs:format
       :~  ['author' [%s (scot %p author.m)]]
           ['text' [%s text.m]]
