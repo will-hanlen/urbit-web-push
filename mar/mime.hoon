@@ -1,13 +1,32 @@
-::  mime mark: pass-through for HTTP responses
 ::
-|_  =mime
-++  grab
-  |%
-  ++  noun  mime
-  --
+::::  /hoon/mime/mar
+  ::
+/?    310
+::
+|_  own=mime
 ++  grow
+  ^?
   |%
-  ++  noun  mime
+  ++  jam  `@`q.q.own
   --
-++  grad  %noun
+::
+++  grab                                                ::  convert from
+  ^?
+  |%
+  ++  noun  mime                                  ::  clam from %noun
+  ++  tape
+    |=(a=_"" [/application/x-urb-unknown (as-octt:mimes:html a)])
+  --
+++  grad
+  ^?
+  |%
+  ++  form  %mime
+  ++  diff  |=(mime +<)
+  ++  pact  |=(mime +<)
+  ++  join  |=([mime mime] `(unit mime)`~)
+  ++  mash
+    |=  [[ship desk mime] [ship desk mime]]
+    ^-  mime
+    ~|(%mime-mash !!)
+  --
 --
