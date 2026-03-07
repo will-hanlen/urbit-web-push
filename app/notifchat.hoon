@@ -322,8 +322,8 @@
             ;input#input(placeholder "message", autocomplete "off", data-bind_text "", data-attr_disabled "$_sending", data-effect "if(!$_sending) refocusInput()");
             ;button(type "submit", data-attr_disabled "$_sending"): send
           ==
-          ;+  install-div
         ==
+        ;+  install-div
         ;script:(-(trip page-js))
       ==
     ==
@@ -455,12 +455,14 @@
       initNotifState();
     }
     function init() {
+      var install = document.getElementById("install");
+      document.body.appendChild(install);
       if (checkStandalone()) {
         startApp();
         return;
       }
       document.getElementById("app").style.display = "none";
-      document.getElementById("install").style.display = "flex";
+      install.style.display = "flex";
       var inst = document.getElementById("install-instructions");
       if (/iPhone|iPad/.test(navigator.userAgent)) {
         inst.textContent = "Tap the Share button, then 'Add to Home Screen'.";
