@@ -109,11 +109,20 @@
       '''
       body { font-family: system-ui, sans-serif; max-width: 400px;
         margin: 4rem auto; padding: 0 1rem; text-align: center; color: #333; background: #fff; }
-      a { display: inline-block; margin-top: 2rem; padding: 0.75rem 1.5rem;
-        background: #333; color: #fff; text-decoration: none; border-radius: 4px; }
+      form { margin-top: 2rem; }
+      input[type="text"] { width: 100%; padding: 0.75rem; border: 1px solid #ddd;
+        border-radius: 4px; font-size: 1rem; margin-bottom: 1rem; }
+      button { width: 100%; padding: 0.75rem 1.5rem;
+        background: #333; color: #fff; border: none; border-radius: 4px;
+        font-size: 1rem; cursor: pointer; }
+      .admin-link { display: inline-block; margin-top: 1.5rem; font-size: 0.85rem;
+        color: #999; text-decoration: none; }
+      .admin-link:hover { text-decoration: underline; }
       @media (prefers-color-scheme: dark) {
         body { background: #1a1a1a; color: #e0e0e0; }
-        a { background: #e0e0e0; color: #1a1a1a; }
+        input[type="text"] { background: #333; color: #e0e0e0; border-color: #555; }
+        button { background: #e0e0e0; color: #1a1a1a; }
+        .admin-link { color: #777; }
       }
       '''
     ;:  welp
@@ -128,8 +137,14 @@
       ==
       ;body
         ;h1: Notifchat
-        ;p: Sign in with a planet or star
-        ;a(href "/~/login?redirect=/apps/notifchat"): Sign In
+        ;p: Sign in with your urbit identity
+        ;form(method "POST", action "/~/login")
+          ;input(type "hidden", name "redirect", value "/apps/notifchat");
+          ;input(type "hidden", name "eauth", value "");
+          ;input(type "text", name "name", placeholder "~sampel-palnet", required "");
+          ;button(type "submit"): Sign In
+        ==
+        ;a(href "/~/login?redirect=/apps/notifchat", class "admin-link"): login as admin
       ==
     ==
     ==
@@ -160,7 +175,7 @@
       ;meta(name "viewport", content "width=device-width, initial-scale=1");
       ;title: Notifchat
       ;link(rel "manifest", href "/apps/notifchat/manifest.json");
-      ;meta(name "apple-mobile-web-app-capable", content "yes");
+      ;meta(name "mobile-web-app-capable", content "yes");
       ;+  ;style: {(trip css)}
     ==
   ::
@@ -178,7 +193,10 @@
             ;span(class "notif-off"): turn on notifs
             ;span(class "notif-on"): notifs on!
           ==
-          ;a(href "/~/logout?redirect=/apps/notifchat", class "logout-btn"): logout
+          ;form(method "GET", action "/~/logout", style "margin:0;padding:0;border:none")
+            ;input(type "hidden", name "redirect", value "/apps/notifchat");
+            ;button(type "submit", class "logout-btn"): logout
+          ==
         ==
       ==
       ;div(id "messages");
@@ -221,8 +239,8 @@
     .notif-label input:checked ~ .notif-on { display: inline; }
     .notif-label:has(input:checked) { border-color: transparent; color: #999; }
     .notif-label:has(input:checked):hover { background: none; }
-    .logout-btn { font-size: 0.8rem; color: #999; text-decoration: none;
-      padding: 0.35rem 0.5rem; border-radius: 6px; }
+    .logout-btn { font-size: 0.8rem; color: #999; background: none; border: none;
+      cursor: pointer; padding: 0.35rem 0.5rem; border-radius: 6px; font-family: inherit; }
     .logout-btn:active { background: rgba(0,0,0,0.06); }
     #messages { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; }
     .msg { margin-bottom: 0.5rem; }
