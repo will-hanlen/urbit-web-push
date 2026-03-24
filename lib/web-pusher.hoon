@@ -1,8 +1,7 @@
 ::  lib/web-pusher: agent wrapper for web push notifications
 ::
-::  Wraps a Gall agent to transparently handle VAPID key
-::  management, browser subscription tracking, encrypted push
-::  delivery via iris, and delivery status tracking.
+::  Wraps a Gall agent to handle VAPID key management,
+::  encrypted push delivery via iris, and delivery tracking.
 ::
 ::  The wrapper owns a pusher-state alongside the inner agent's
 ::  state, persisting both through on-save/on-load.
@@ -14,87 +13,48 @@
 ::    %-  %:  agent:web-pusher
 ::          /apps/my-app
 ::          'mailto:admin@example.com'
-::          %.y
+::          200
 ::        ==
 ::    ^-  agent:gall
 ::    |_  =bowl:gall
 ::    ...
 ::
-::  The third argument (allow-comets) controls whether comet
-::  ships may register push subscriptions.
-::
-::  The fourth argument (max-sends) controls how many delivery
+::  The third argument (max-sends) controls how many delivery
 ::  records to retain in send-order/sends.  When 0, no delivery
-::  records are kept (cards are still sent, just no tracking).
-::  Use 0 for production; set higher for debugging.
+::  records are kept.
 ::
 ::  The wrapper intercepts HTTP requests under {base}/~web-pusher:
 ::
 ::    GET  {base}/~web-pusher/sw.js       -- default service worker (public)
-::    GET  {base}/~web-pusher/vapid-key   -- VAPID public key
-::    POST {base}/~web-pusher/subscribe   -- add subscription
-::    POST {base}/~web-pusher/unsubscribe -- remove subscription
-::    POST {base}/~web-pusher/check-sub   -- verify subscription exists
-::
-::  POST body formats (JSON):
-::
-::    /subscribe:
-::      { "id": "b-1709654321",
-::        "endpoint": "https://fcm.googleapis.com/...",
-::        "p256dh": "<base64url-encoded public key>",
-::        "auth": "<base64url-encoded auth secret>"
-::      }
-::
-::    /unsubscribe:
-::      { "id": "b-1709654321" }
-::
-::    /check-sub:
-::      { "endpoint": "https://fcm.googleapis.com/..." }
-::
-::  The sw.js endpoint is served without authentication so browsers
-::  can register it as a service worker from any scope.
-::
-::  To use the default service worker from your inner agent's JS:
-::
-::    navigator.serviceWorker.register("{base}/~web-pusher/sw.js")
-::
-::  The default worker handles push events by parsing the payload
-::  as JSON with fields: title, body, icon, url, tag.  It collapses
-::  notifications with the same tag and opens the url on click.
-::
-::  If you need custom behavior, serve your own worker instead.
+::    GET  {base}/~web-pusher/vapid-key   -- VAPID public key (public)
+::    GET  {base}/~web-pusher/debug       -- debug page (owner only)
 ::
 ::  All other HTTP requests pass through to the inner agent.
 ::
-::  The wrapper also intercepts:
+::  The wrapper intercepts pokes (all self-pokes only):
 ::
-::    - Arvo responses on /web-pusher/** wires (iris callbacks)
-::    - Pokes with mark %push-send: push-send
-::      targets: specific ships (empty = all subscribed)
-::      tags: filter by user prefs (empty = no filtering)
-::      exclude: remove these ships from recipients
-::      Ships with no prefs or empty prefs receive all notifications.
-::    - Peeks on /web-pusher/**:
+::    %push-send        -- encrypt and deliver notifications
+::    %push-subscribe   -- store a subscription
+::    %push-unsubscribe -- remove a subscription
+::    %push-set-tags    -- update tags on a subscription
 ::
-::        /u/web-pusher          -- loob, always %.y
-::        /x/web-pusher/state    -- pusher-state noun
-::        /x/web-pusher/sends/@p -- (list delivery) for ship
-::        /x/web-pusher/sends/@p/@ta -- (list delivery) for sub
+::  The inner agent manages subscriptions by poking itself:
+::
+::    [%pass /push %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
+::    [%pass /push %agent [our dap]:bowl %poke %push-unsubscribe !>(pu)]
+::    [%pass /push %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
 ::
 ::  The inner agent triggers notifications by poking itself:
 ::
-::    =/  =push-send  [targets=~ tags=`(set term)`(sy %chat ~) exclude=(sy src.bowl ~) msg]
+::    =/  =push-send  [targets=~ tags=`(set term)`(sy %chat ~) exclude=~ msg]
 ::    [%pass /notify %agent [our dap]:bowl %poke %push-send !>(push-send)]
 ::
-::  Pass ~ for targets to broadcast, ~ for tags to skip filtering.
-::  Ships with no prefs or empty prefs receive all notifications.
+::  Peeks on /web-pusher/**:
 ::
-::    GET  {base}/~web-pusher/prefs       -- user's tag preferences
-::    POST {base}/~web-pusher/prefs       -- update tag preferences
-::
-::  POST /prefs body (JSON):
-::    { "tags": ["chat", "dm"] }
-::  Empty array means receive all notifications.
+::    /u/web-pusher          -- loob, always %.y
+::    /x/web-pusher/state    -- pusher-state noun
+::    /x/web-pusher/sends/@p -- (list delivery) for ship
+::    /x/web-pusher/sends/@p/@ta -- (list delivery) for sub
 ::
 /-  push
 /+  web-push, server
@@ -106,25 +66,7 @@
     self.skipWaiting();
   });
   self.addEventListener("activate", function(event) {
-    event.waitUntil(
-      self.clients.claim().then(function() {
-        return self.registration.pushManager.getSubscription();
-      }).then(function(sub) {
-        if (!sub) return;
-        var base = self.registration.scope.replace(/\/~web-pusher\/$/, "");
-        return fetch(base + "/~web-pusher/check-sub", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({endpoint: sub.endpoint})
-        }).then(function(res) {
-          if (res.status === 404) {
-            return sub.unsubscribe().then(function() {
-              return self.registration.unregister();
-            });
-          }
-        });
-      })
-    );
+    event.waitUntil(self.clients.claim());
   });
   self.addEventListener("push", function(event) {
     var data = {title: "Notification", body: ""};
@@ -161,7 +103,7 @@
   '''
 |%
 ++  agent
-  |=  [base=path sub-id=@t allow-comets=? max-sends=@ud]
+  |=  [base=path sub-id=@t max-sends=@ud]
   |=  =agent:gall
   ^-  agent:gall
   =|  pstate=pusher-state
@@ -170,7 +112,7 @@
   |_  =bowl:gall
   +*  this  .
       ag    ~(. agent bowl)
-      hep   ~(. helper bowl pstate allow-comets max-sends)
+      hep   ~(. helper bowl pstate max-sends)
   ::
   ++  on-init
     ^-  (quip card:agent:gall agent:gall)
@@ -193,9 +135,43 @@
       %-  mole  |.
       !<([%web-pusher pusher-state vase] old-state)
     ?~  old
-      ::  state doesn't match current schema -- reinitialize
+      ::  state doesn't match current schema -- try migration
       ::
-      on-init
+      =/  old-v0=(unit [%web-pusher old-pusher-state vase])
+        %-  mole  |.
+        !<([%web-pusher old-pusher-state vase] old-state)
+      ?~  old-v0
+        ::  can't migrate, reinitialize
+        ::
+        on-init
+      =/  [%web-pusher ops=old-pusher-state inner=vase]  u.old-v0
+      ::  migrate: convert subscription -> tagged-sub, merge prefs
+      ::
+      =/  new-subs=(map @p (map @ta tagged-sub))
+        %-  ~(run by subs.ops)
+        |=  inner=(map @ta subscription)
+        ^-  (map @ta tagged-sub)
+        (~(run by inner) |=(s=subscription [sub=s tags=~]))
+      ::  apply old prefs to all subscriptions for each ship
+      ::
+      =.  new-subs
+        %-  ~(rep by prefs.ops)
+        |=  [[=ship tags=(set term)] acc=(map @p (map @ta tagged-sub))]
+        =/  inner=(map @ta tagged-sub)  (~(gut by acc) ship ~)
+        %+  ~(put by acc)  ship
+        (~(run by inner) |=(ts=tagged-sub ts(tags tags)))
+      =.  pstate
+        :*  config.ops
+            new-subs
+            send-order.ops
+            sends.ops
+            next-id.ops
+        ==
+      =^  cards  agent  (on-load:ag inner)
+      :_  this
+      :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
+          cards
+      ==
     =/  [%web-pusher ps=pusher-state inner=vase]  u.old
     =.  pstate  ps
     =^  cards  agent  (on-load:ag inner)
@@ -207,11 +183,45 @@
   ++  on-poke
     |=  [=mark =vase]
     ^-  (quip card:agent:gall agent:gall)
+    ::  push-send: encrypt and deliver notifications
+    ::
     ?:  ?=(%push-send mark)
       ?>  =(our src):bowl
       =/  =push-send  !<(push-send vase)
       =^  cards  pstate  (send-to-ships:hep push-send)
       [cards this]
+    ::  push-subscribe: store a subscription
+    ::
+    ?:  ?=(%push-subscribe mark)
+      ?>  =(our src):bowl
+      =/  ps=push-subscribe  !<(push-subscribe vase)
+      =/  inner=(map @ta tagged-sub)  (~(gut by subs.pstate) who.ps ~)
+      =.  subs.pstate
+        (~(put by subs.pstate) who.ps (~(put by inner) id.ps [sub.ps tags.ps]))
+      `this
+    ::  push-unsubscribe: remove a subscription
+    ::
+    ?:  ?=(%push-unsubscribe mark)
+      ?>  =(our src):bowl
+      =/  ps=push-unsubscribe  !<(push-unsubscribe vase)
+      =/  inner=(map @ta tagged-sub)  (~(gut by subs.pstate) who.ps ~)
+      =/  new-inner  (~(del by inner) id.ps)
+      =.  subs.pstate
+        ?:  =(~ new-inner)
+          (~(del by subs.pstate) who.ps)
+        (~(put by subs.pstate) who.ps new-inner)
+      `this
+    ::  push-set-tags: update tags on a subscription
+    ::
+    ?:  ?=(%push-set-tags mark)
+      ?>  =(our src):bowl
+      =/  ps=push-set-tags  !<(push-set-tags vase)
+      =/  inner=(map @ta tagged-sub)  (~(gut by subs.pstate) who.ps ~)
+      =/  ts=(unit tagged-sub)  (~(get by inner) id.ps)
+      ?~  ts  `this
+      =.  subs.pstate
+        (~(put by subs.pstate) who.ps (~(put by inner) id.ps u.ts(tags tags.ps)))
+      `this
     ::
     ?.  ?=(%handle-http-request mark)
       =^  cards  agent  (on-poke:ag mark vase)
@@ -238,14 +248,27 @@
       :_  this
       %+  give-simple-payload:app:server  eyre-id
       (js-response:gen:server default-sw-js)
-    ::  all other push routes require authentication
+    ::  serve VAPID public key publicly
     ::
-    ?.  |(authenticated.inbound-request (lte (met 3 src.bowl) 8))
+    ?:  &(=('GET' meth) =(sub-path /vapid-key))
       :_  this
-      (err-cards:hep eyre-id 403 'not authenticated')
-    =^  cards  pstate
-      (handle-http:hep eyre-id sub-path meth body.request.inbound-request)
-    [cards this]
+      ?~  config.pstate
+        (err-cards:hep eyre-id 500 'not configured')
+      %+  give-simple-payload:app:server  eyre-id
+      [[200 [['content-type' 'text/plain'] ~]] `(as-octs:mimes:html vapid-pub-b64:hep)]
+    ::  debug page (owner only)
+    ::
+    ?:  &(=('GET' meth) =(sub-path /debug))
+      :_  this
+      ?.  =(our src):bowl
+        (err-cards:hep eyre-id 403 'owner only')
+      %+  give-simple-payload:app:server  eyre-id
+      %-  html-response:gen:server
+      (as-octs:mimes:html (crip (welp "<!DOCTYPE html>" (en-xml:html debug-page:hep))))
+    ::  anything else under ~web-pusher is 404
+    ::
+    :_  this
+    (give-simple-payload:app:server eyre-id not-found:gen:server)
   ::
   ++  on-watch
     |=  =path
@@ -316,8 +339,19 @@
     [cards this]
   --
 ::
+::  old pusher-state for migration
+::
++$  old-pusher-state
+  $:  config=(unit push-config)
+      subs=(map @p (map @ta subscription))
+      prefs=(map @p (set term))
+      send-order=(list send-key)
+      sends=(map send-key delivery)
+      next-id=@ud
+  ==
+::
 ++  helper
-  |_  [=bowl:gall pstate=pusher-state allow-comets=? max-sends=@ud]
+  |_  [=bowl:gall pstate=pusher-state max-sends=@ud]
   ::
   ++  vapid-pub-b64
     ^-  @t
@@ -334,32 +368,30 @@
     =/  targets=(set @p)
       ?:  =(~ targets.push-send)  ~(key by subs.pstate)
       targets.push-send
-    ::  step 2: filter by tag prefs (empty tags = no filtering)
-    ::  ships with no prefs or empty prefs receive all notifications
-    ::
-    =.  targets
-      ?:  =(~ tags.push-send)  targets
-      %-  ~(rep in targets)
-      |=  [=ship acc=(set @p)]
-      =/  sp  (~(get by prefs.pstate) ship)
-      ?:  |(?=(~ sp) =(~ u.sp))  (~(put in acc) ship)
-      ?:  =(~ (~(int in u.sp) tags.push-send))  acc
-      (~(put in acc) ship)
-    ::  step 3: remove excluded ships
+    ::  step 2: remove excluded ships
     ::
     =.  targets  (~(dif in targets) exclude.push-send)
     =/  payload=octs  (message-to-json:web-push msg)
     =/  exp=@ud  (add (unt:chrono:userlib now.bowl) 86.400)
-    ::  collect all [ship id subscription] triples
+    ::  collect matching [ship id subscription] triples
+    ::  filter by per-subscription tags when push-send has tags
     ::
     =/  trips=(list [=ship id=@ta sub=subscription])
       %-  zing
       %+  turn  ~(tap in targets)
       |=  =ship
-      =/  inner=(map @ta subscription)  (~(gut by subs.pstate) ship ~)
-      %+  turn  ~(tap by inner)
-      |=  [id=@ta sub=subscription]
-      [ship id sub]
+      =/  inner=(map @ta tagged-sub)  (~(gut by subs.pstate) ship ~)
+      %+  murn  ~(tap by inner)
+      |=  [id=@ta ts=tagged-sub]
+      ::  if push-send has no tags, send to all subs
+      ::  if sub has no tags (empty), it receives everything
+      ::  otherwise, sub must have at least one matching tag
+      ::
+      ?:  =(~ tags.push-send)  `[ship id sub.ts]
+      ?:  =(~ tags.ts)  `[ship id sub.ts]
+      ?.  =(~ (~(int in tags.ts) tags.push-send))
+        `[ship id sub.ts]
+      ~
     =/  ps  pstate
     =/  cards=(list card:agent:gall)  ~
     |-
@@ -408,7 +440,7 @@
       =/  ps  (update-delivery key ds)
       ::  remove the specific subscription
       ::
-      =/  inner=(map @ta subscription)  (~(gut by subs.ps) ship ~)
+      =/  inner=(map @ta tagged-sub)  (~(gut by subs.ps) ship ~)
       =/  new-inner  (~(del by inner) sid)
       ?:  =(~ new-inner)
         `ps(subs (~(del by subs.ps) ship))
@@ -422,142 +454,9 @@
       pstate
     pstate(sends (~(jab by sends.pstate) key |=(d=delivery d(delivery-status ds))))
   ::
-  ++  handle-http
-    |=  [eyre-id=@ta site=path method=@t body=(unit octs)]
-    ^-  (quip card:agent:gall pusher-state)
-    ?:  &(=('GET' method) =(site /prefs))
-      =/  sp=(set term)  (~(gut by prefs.pstate) src.bowl ~)
-      =/  arr=json  [%a (turn ~(tap in sp) |=(t=term [%s t]))]
-      :_  pstate
-      %+  give-simple-payload:app:server  eyre-id
-      (json-response:gen:server arr)
-    ?:  &(=('POST' method) =(site /prefs))
-      (do-prefs eyre-id body)
-    ?:  =('GET' method)
-      :_  pstate
-      ?:  =(site /vapid-key)
-        ?~  config.pstate
-          (err-cards eyre-id 500 'not configured')
-        %+  give-simple-payload:app:server  eyre-id
-        [[200 [['content-type' 'text/plain'] ~]] `(as-octs:mimes:html vapid-pub-b64)]
-      ?:  =(site /debug)
-        ?.  =(our src):bowl
-          (err-cards eyre-id 403 'owner only')
-        %+  give-simple-payload:app:server  eyre-id
-        %-  html-response:gen:server
-        (as-octs:mimes:html (crip (welp "<!DOCTYPE html>" (en-xml:html debug-page))))
-      (give-simple-payload:app:server eyre-id not-found:gen:server)
-    ?:  =('POST' method)
-      ?:  =(site /subscribe)
-        (do-subscribe eyre-id body)
-      ?:  =(site /unsubscribe)
-        (do-unsubscribe eyre-id body)
-      ?:  =(site /check-sub)
-        (do-check-sub eyre-id body)
-      [(give-simple-payload:app:server eyre-id not-found:gen:server) pstate]
-    [(give-simple-payload:app:server eyre-id not-found:gen:server) pstate]
-  ::
-  ++  do-subscribe
-    |=  [eyre-id=@ta body=(unit octs)]
-    ^-  (quip card:agent:gall pusher-state)
-    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
-    ::  reject comets if not allowed
-    ::
-    ?:  &(!allow-comets ?=(%pawn (clan:title src.bowl)))
-      [(err-cards eyre-id 403 'comets not allowed') pstate]
-    =/  jon=(unit json)  (de:json:html q.u.body)
-    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
-    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
-    =/  obj  p.u.jon
-    =/  id-j  (~(get by obj) 'id')
-    =/  ep-j  (~(get by obj) 'endpoint')
-    =/  dh-j  (~(get by obj) 'p256dh')
-    =/  au-j  (~(get by obj) 'auth')
-    ?.  ?&  ?=(^ id-j)  ?=(%s -.u.id-j)
-            ?=(^ ep-j)  ?=(%s -.u.ep-j)
-            ?=(^ dh-j)  ?=(%s -.u.dh-j)
-            ?=(^ au-j)  ?=(%s -.u.au-j)
-        ==
-      [(err-cards eyre-id 400 'missing fields') pstate]
-    =/  dh-octs=(unit octs)  (de-base64url:web-push p.u.dh-j)
-    =/  au-octs=(unit octs)  (de-base64url:web-push p.u.au-j)
-    ?~  dh-octs  [(err-cards eyre-id 400 'invalid p256dh') pstate]
-    ?~  au-octs  [(err-cards eyre-id 400 'invalid auth') pstate]
-    =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
-    =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
-    =/  sub=subscription  [p.u.ep-j dh au]
-    =/  id=@ta  `@ta`p.u.id-j
-    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
-    :-  (ok-cards eyre-id)
-    pstate(subs (~(put by subs.pstate) src.bowl (~(put by inner) id sub)))
-  ::
-  ++  do-unsubscribe
-    |=  [eyre-id=@ta body=(unit octs)]
-    ^-  (quip card:agent:gall pusher-state)
-    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
-    =/  jon=(unit json)  (de:json:html q.u.body)
-    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
-    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
-    =/  id-j  (~(get by p.u.jon) 'id')
-    ?~  id-j  [(err-cards eyre-id 400 'missing id') pstate]
-    ?.  ?=(%s -.u.id-j)  [(err-cards eyre-id 400 'id must be string') pstate]
-    =/  id=@ta  `@ta`p.u.id-j
-    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
-    =/  new-inner  (~(del by inner) id)
-    :-  (ok-cards eyre-id)
-    ?:  =(~ new-inner)
-      pstate(subs (~(del by subs.pstate) src.bowl))
-    pstate(subs (~(put by subs.pstate) src.bowl new-inner))
-  ::
-  ++  do-check-sub
-    ::  check if a push endpoint is registered for this user
-    ::  returns 200 if found, 404 if not
-    ::
-    |=  [eyre-id=@ta body=(unit octs)]
-    ^-  (quip card:agent:gall pusher-state)
-    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
-    =/  jon=(unit json)  (de:json:html q.u.body)
-    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
-    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
-    =/  ep-j  (~(get by p.u.jon) 'endpoint')
-    ?~  ep-j  [(err-cards eyre-id 400 'missing endpoint') pstate]
-    ?.  ?=(%s -.u.ep-j)  [(err-cards eyre-id 400 'endpoint must be string') pstate]
-    =/  ep=@t  p.u.ep-j
-    =/  inner=(map @ta subscription)  (~(gut by subs.pstate) src.bowl ~)
-    =/  found=?
-      %+  lien  ~(val by inner)
-      |=(sub=subscription =(endpoint.sub ep))
-    :_  pstate
-    ?:  found
-      (ok-cards eyre-id)
-    (err-cards eyre-id 404 'subscription not found')
-  ::
-  ++  do-prefs
-    |=  [eyre-id=@ta body=(unit octs)]
-    ^-  (quip card:agent:gall pusher-state)
-    ?~  body  [(err-cards eyre-id 400 'no body') pstate]
-    =/  jon=(unit json)  (de:json:html q.u.body)
-    ?~  jon  [(err-cards eyre-id 400 'invalid json') pstate]
-    ?.  ?=(%o -.u.jon)  [(err-cards eyre-id 400 'expected object') pstate]
-    =/  tags-j  (~(get by p.u.jon) 'tags')
-    ?~  tags-j  [(err-cards eyre-id 400 'missing tags') pstate]
-    ?.  ?=(%a -.u.tags-j)  [(err-cards eyre-id 400 'tags must be array') pstate]
-    =/  tags=(set term)
-      %-  ~(gas in *(set term))
-      %+  murn  p.u.tags-j
-      |=  j=json
-      ?.  ?=(%s -.j)  ~
-      `p.j
-    ::  empty tags = receive all, remove entry
-    ::
-    :-  (ok-cards eyre-id)
-    ?:  =(~ tags)
-      pstate(prefs (~(del by prefs.pstate) src.bowl))
-    pstate(prefs (~(put by prefs.pstate) src.bowl tags))
-  ::
   ++  debug-page
     ^-  manx
-    =/  sub-list=(list [@p (map @ta subscription)])
+    =/  sub-list=(list [@p (map @ta tagged-sub)])
       ~(tap by subs.pstate)
     =/  send-list=(list [send-key delivery])
       %+  murn  send-order.pstate
@@ -565,7 +464,7 @@
       =/  del  (~(get by sends.pstate) key)
       ?~  del  ~
       `[key u.del]
-    ::  build config section content
+    ::  config section
     ::
     =/  config-body=manx
       ?~  config.pstate
@@ -580,49 +479,48 @@
           ;td: {(trip vapid-pub-b64)}
         ==
       ==
-    ::  build subscription items
+    ::  subscription items
     ::
     =/  sub-items=(list manx)
       ?~  sub-list
         :~  ;p: no subscriptions
         ==
       %+  turn  sub-list
-      |=  [=ship inner=(map @ta subscription)]
+      |=  [=ship inner=(map @ta tagged-sub)]
       ^-  manx
-      =/  inl=(list [@ta subscription])  ~(tap by inner)
-      =/  sp=(set term)  (~(gut by prefs.pstate) ship ~)
-      =/  prefs-text=tape
-        ?:  =(~ sp)  "all"
-        %-  zing
-        ^-  (list tape)
-        %+  join  ", "
-        (turn ~(tap in sp) |=(t=term (trip t)))
+      =/  inl=(list [@ta tagged-sub])  ~(tap by inner)
       =/  sub-rows=(list manx)
         %+  turn  inl
-        |=  [id=@ta sub=subscription]
+        |=  [id=@ta ts=tagged-sub]
         ^-  manx
+        =/  tags-text=tape
+          ?:  =(~ tags.ts)  "all"
+          %-  zing
+          ^-  (list tape)
+          %+  join  ", "
+          (turn ~(tap in tags.ts) |=(t=term (trip t)))
         ;details
-          ;summary: {(trip id)}
+          ;summary: {(trip id)} (tags: {tags-text})
           ;table
             ;tr
               ;td: endpoint
-              ;td: {(trip endpoint.sub)}
+              ;td: {(trip endpoint.sub.ts)}
             ==
             ;tr
               ;td: p256dh
-              ;td(class "muted"): {(scow %ux p256dh.sub)}
+              ;td(class "muted"): {(scow %ux p256dh.sub.ts)}
             ==
             ;tr
               ;td: auth
-              ;td(class "muted"): {(scow %ux auth.sub)}
+              ;td(class "muted"): {(scow %ux auth.sub.ts)}
             ==
           ==
         ==
       ;details
-        ;summary: {(scow %p ship)} ({(scow %ud (lent inl))} browsers, prefs: {prefs-text})
+        ;summary: {(scow %p ship)} ({(scow %ud (lent inl))} browsers)
         ;*  sub-rows
       ==
-    ::  build delivery rows
+    ::  delivery rows
     ::
     =/  sends-body=manx
       ?~  send-list
@@ -739,14 +637,6 @@
       ?~  del  ~
       `[key u.del]
     ps(send-order kept, sends new-sends)
-  ::
-  ++  ok-cards
-    |=  eyre-id=@ta
-    ^-  (list card:agent:gall)
-    %+  give-simple-payload:app:server  eyre-id
-    %-  json-response:gen:server
-    [%o (~(gas by *(map @t json)) ~[['ok' [%b &]]])]
-  ::
   ::
   ++  err-cards
     |=  [eyre-id=@ta code=@ud msg=@t]

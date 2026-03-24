@@ -36,26 +36,71 @@ Use the `/dojo` skill (e.g., `/dojo -test /=web-push=/tests`).
 ### Layer structure
 
 ```
-app/push.hoon          -- Demo agent: serves UI, handles /send endpoint
-  └─ lib/web-pusher    -- Agent wrapper: VAPID keys, subscriptions, delivery tracking
+app/notifchat.hoon     -- Demo agent: chat UI, push subscription endpoints, business logic
+  └─ lib/web-pusher    -- Agent wrapper: VAPID keys, subscription store, delivery engine
        └─ lib/web-push -- Core protocol: encryption, VAPID headers, key generation
             ├─ lib/jwt      -- ES256 JWT signing/verification (P-256/secp256r1)
             ├─ lib/hkdf     -- HKDF-SHA-256 extract+expand (RFC 5869)
             └─ lib/aes-gcm  -- AES-128-GCM encrypt/decrypt (NIST SP 800-38D)
 ```
 
-- **sur/push.hoon** — Shared types: `subscription`, `push-config`, `push-message`, `delivery`, `pusher-state`
-- **lib/web-pusher.hoon** — Agent wrapper pattern: wraps any gall agent via `%-  agent:web-pusher`. Intercepts HTTP on `{base}/~web-pusher/*`, pokes with marks `%push-send`/`%push-send-to`, peeks on `/web-pusher/**`, and iris responses on `/web-pusher/**` wires. Everything else passes through to the inner agent.
-- **lib/web-push.hoon** — Stateless library. `+send-notification` is the main entry point; `+encrypt-payload` handles the RFC 8291 encryption pipeline.
-- **lib/jwt.hoon** — Defines the P-256 curve constants (`secp256r1`) and all JWT operations. Exposes curve utilities (`priv-to-pub`, `serialize-point`, `mul-point-scalar`, etc.) via `=,  secp256r1` in web-push.
+### sur/push.hoon — Shared types
 
-### How the inner agent sends notifications
+- `subscription` — browser push endpoint + keys (p256dh, auth as MSB-first atoms)
+- `tagged-sub` — subscription with per-subscription `tags=(set term)` for filtering
+- `push-config` — VAPID keypair + mailto subject
+- `push-message` — notification payload (title, body, icon, url, tag)
+- `push-send` — delivery request: targets, tag filter, exclusions, message
+- `push-subscribe` / `push-unsubscribe` / `push-set-tags` — inner→outer poke types
+- `pusher-state` — wrapper state: config, subs (per-ship map of tagged-subs), delivery tracking
 
-The inner agent pokes itself with `%push-send` (broadcast) or `%push-send-to` (targeted):
+### lib/web-pusher.hoon — Agent wrapper (store + delivery engine)
+
+Wraps any gall agent via `%-  agent:web-pusher`. The wrapper is deliberately simple — it stores data and delivers notifications, but has no business logic about who may subscribe or what preferences are valid.
+
+**HTTP endpoints** (under `{base}/~web-pusher/`):
+- `GET /sw.js` — default service worker (public)
+- `GET /vapid-key` — VAPID public key (public)
+- `GET /debug` — debug page showing config, subs, deliveries (owner only)
+
+All other HTTP passes through to the inner agent.
+
+**Intercepted self-pokes** (from inner agent only):
+- `%push-subscribe` — store a `tagged-sub`
+- `%push-unsubscribe` — remove a subscription by `[who id]`
+- `%push-set-tags` — update tags on an existing subscription
+- `%push-send` — encrypt and deliver notifications via iris
+
+**Tag-based filtering**: When `%push-send` includes tags, only subscriptions with matching tags (or empty tags = receive all) get the notification.
+
+**Delivery tracking**: Iris responses update delivery status (pending→sent/failed/expired/gone). 410/404 responses auto-remove dead subscriptions.
+
+**Peeks** on `/web-pusher/**`:
+- `/u/web-pusher` — loob, always `%.y`
+- `/x/web-pusher/state` — full `pusher-state` noun
+- `/x/web-pusher/sends/@p` — deliveries for a ship
+- `/x/web-pusher/sends/@p/@ta` — deliveries for a specific subscription
+
+### Inner agent responsibilities
+
+The inner agent owns all user-facing HTTP and business logic. It:
+1. Handles browser subscription endpoints (parse JSON, validate auth, base64url decode keys)
+2. Self-pokes `%push-subscribe`/`%push-unsubscribe`/`%push-set-tags` to manage wrapper state
+3. Self-pokes `%push-send` to trigger notification delivery
+4. Scries `/x/web-pusher/state` to check existing subscriptions/tags
+
+Example (notifchat): the `action=push-subscribe` endpoint parses the browser's PushSubscription JSON, converts base64url→MSB-first atoms via `de-base64url:web-push` + `rev 3`, and pokes:
 ```hoon
-[%pass /notify %agent [our dap]:bowl %poke %push-send !>(msg)]
+[%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
 ```
-The wrapper intercepts this, encrypts, and delivers via iris.
+
+### lib/web-push.hoon — Stateless crypto library
+
+`+send-notification` is the main entry point; `+encrypt-payload` handles the RFC 8291 encryption pipeline. Also provides `de-base64url` for key decoding.
+
+### lib/jwt.hoon — P-256 / ES256
+
+Defines secp256r1 curve constants and all JWT operations. Exposes curve utilities (`priv-to-pub`, `serialize-point`, `mul-point-scalar`, etc.) via `=,  secp256r1` in web-push.
 
 ### Desk metadata
 - Kelvin: `[%zuse 413]`

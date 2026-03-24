@@ -4,7 +4,7 @@
 ::  subscriptions, encryption, and delivery tracking.
 ::
 /-  notifchat, push
-/+  web-pusher, default-agent, verb, server, datastar
+/+  web-pusher, web-push, default-agent, verb, server, datastar
 /*  datastar-js  %js  /lib/web/datastar/js
 ::
 |%
@@ -57,7 +57,6 @@
 %-  %:  agent:web-pusher
     /apps/notifchat
     'mailto:you@example.com'
-    %.y
     200
   ==
 ^-  agent:gall
@@ -86,6 +85,44 @@
   |=  [=mark =vase]
   ^-  (quip card _this)
   |^
+  ?:  ?=(%push-test mark)
+    ?>  =(our src):bowl
+    =/  text=@t  !<(@t vase)
+    =/  parts=(list segment:notifchat)  (parse-segments text)
+    =/  msg=message:notifchat  [our.bowl text now.bowl parts]
+    =.  msgs.state
+      %+  scag  max-msgs
+      `(list message:notifchat)`[msg msgs.state]
+    =/  who-t  (trip (scot %p our.bowl))
+    =/  full  ;:(welp who-t ": " (trip text))
+    =/  title=@t
+      ?:  (lte (lent full) 80)  (crip full)
+      (crip (weld (scag 77 full) "..."))
+    =/  push-msg=push-message:push
+      [title '' ~ `'/apps/notifchat' `'message']
+    =/  mentioned=(set @p)
+      %-  ~(gas in *(set @p))
+      %+  murn  parts
+      |=  s=segment:notifchat
+      ?:(?=(%mention -.s) `+.s ~)
+    =/  excl=(set @p)
+      (~(uni in (sy our.bowl ~)) mentioned)
+    =/  broadcast=push-send:push
+      [~ (sy %message ~) excl push-msg]
+    =/  mention-targets=(set @p)
+      (~(del in mentioned) our.bowl)
+    =/  mention-cards=(list card)
+      ?:  =(~ mention-targets)  ~
+      =/  ms=push-send:push  [mention-targets ~ ~ push-msg]
+      ~[[%pass /mention %agent [our dap]:bowl %poke %push-send !>(ms)]]
+    =/  frags
+      ~[["outer" ~ (messages-manx msgs.state)]]
+    :_  this
+    ;:  welp
+      ~[[%pass /notify %agent [our dap]:bowl %poke %push-send !>(broadcast)]]
+      mention-cards
+      (push-sse-all:datastar requests ~ frags)
+    ==
   ?.  ?=(%handle-http-request mark)
     (on-poke:def mark vase)
   =+  !<([eyre-id=@ta =inbound-request:eyre] vase)
@@ -180,8 +217,141 @@
       (give-sse:datastar eyre-id ~[['text' '']] ~)
       (push-sse-all:datastar requests ~ frags)
     ==
+::  push-subscribe: register browser push subscription
+  ::
+  ?:  &(=('POST' meth) =('push-subscribe' action))
+    ?.  allowed
+      :_(this (err-cards eyre-id 403 'not authenticated'))
+    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+    =/  jon=(unit json)  (de:json:html bod)
+    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    =/  obj  p.u.jon
+    =/  id-j  (~(get by obj) 'id')
+    =/  ep-j  (~(get by obj) 'endpoint')
+    =/  dh-j  (~(get by obj) 'p256dh')
+    =/  au-j  (~(get by obj) 'auth')
+    =/  tags-j  (~(get by obj) 'tags')
+    ?.  ?&  ?=(^ id-j)  ?=(%s -.u.id-j)
+            ?=(^ ep-j)  ?=(%s -.u.ep-j)
+            ?=(^ dh-j)  ?=(%s -.u.dh-j)
+            ?=(^ au-j)  ?=(%s -.u.au-j)
+        ==
+      :_(this (err-cards eyre-id 400 'missing fields'))
+    =/  dh-octs=(unit octs)  (de-base64url:web-push p.u.dh-j)
+    =/  au-octs=(unit octs)  (de-base64url:web-push p.u.au-j)
+    ?~  dh-octs  :_(this (err-cards eyre-id 400 'invalid p256dh'))
+    ?~  au-octs  :_(this (err-cards eyre-id 400 'invalid auth'))
+    =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
+    =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
+    =/  sub=subscription:push  [p.u.ep-j dh au]
+    =/  id=@ta  `@ta`p.u.id-j
+    =/  tags=(set term)
+      ?~  tags-j  ~
+      ?.  ?=(%a -.u.tags-j)  ~
+      %-  ~(gas in *(set term))
+      %+  murn  p.u.tags-j
+      |=(j=json ?.(?=(%s -.j) ~ `p.j))
+    =/  ps=push-subscribe:push  [who id sub tags]
+    :_  this
+    :*  [%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
+        (ok-cards eyre-id)
+    ==
+  ::  push-unsubscribe: remove browser push subscription
+  ::
+  ?:  &(=('POST' meth) =('push-unsubscribe' action))
+    ?.  allowed
+      :_(this (err-cards eyre-id 403 'not authenticated'))
+    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+    =/  jon=(unit json)  (de:json:html bod)
+    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    =/  id-j  (~(get by p.u.jon) 'id')
+    ?~  id-j  :_(this (err-cards eyre-id 400 'missing id'))
+    ?.  ?=(%s -.u.id-j)  :_(this (err-cards eyre-id 400 'id must be string'))
+    =/  id=@ta  `@ta`p.u.id-j
+    =/  ps=push-unsubscribe:push  [who id]
+    :_  this
+    :*  [%pass /push/unsub %agent [our dap]:bowl %poke %push-unsubscribe !>(ps)]
+        (ok-cards eyre-id)
+    ==
+  ::  push-check-sub: verify subscription exists on server
+  ::
+  ?:  &(=('POST' meth) =('push-check-sub' action))
+    ?.  allowed
+      :_(this (err-cards eyre-id 403 'not authenticated'))
+    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+    =/  jon=(unit json)  (de:json:html bod)
+    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    =/  ep-j  (~(get by p.u.jon) 'endpoint')
+    ?~  ep-j  :_(this (err-cards eyre-id 400 'missing endpoint'))
+    ?.  ?=(%s -.u.ep-j)  :_(this (err-cards eyre-id 400 'endpoint must be string'))
+    =/  ep=@t  p.u.ep-j
+    =/  ps=pusher-state:push
+      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) who ~)
+    =/  found=?
+      %+  lien  ~(val by inner)
+      |=(ts=tagged-sub:push =(endpoint.sub.ts ep))
+    :_  this
+    ?:  found
+      (ok-cards eyre-id)
+    (err-cards eyre-id 404 'subscription not found')
+  ::  push-prefs GET: return tags for this user's subscriptions
+  ::
+  ?:  &(=('GET' meth) =('push-prefs' action))
+    ?.  allowed
+      :_(this (err-cards eyre-id 403 'not authenticated'))
+    =/  ps=pusher-state:push
+      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) who ~)
+    ::  collect union of all tags across this user's subscriptions
+    =/  all-tags=(set term)
+      %-  ~(rep by inner)
+      |=  [[id=@ta ts=tagged-sub:push] acc=(set term)]
+      (~(uni in acc) tags.ts)
+    =/  arr=json  [%a (turn ~(tap in all-tags) |=(t=term [%s t]))]
+    :_  this
+    %+  give-simple-payload:app:server  eyre-id
+    (json-response:gen:server arr)
+  ::  push-prefs POST: update tags on all subscriptions for this user
+  ::
+  ?:  &(=('POST' meth) =('push-prefs' action))
+    ?.  allowed
+      :_(this (err-cards eyre-id 403 'not authenticated'))
+    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+    =/  jon=(unit json)  (de:json:html bod)
+    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    =/  tags-j  (~(get by p.u.jon) 'tags')
+    ?~  tags-j  :_(this (err-cards eyre-id 400 'missing tags'))
+    ?.  ?=(%a -.u.tags-j)  :_(this (err-cards eyre-id 400 'tags must be array'))
+    =/  tags=(set term)
+      %-  ~(gas in *(set term))
+      %+  murn  p.u.tags-j
+      |=(j=json ?.(?=(%s -.j) ~ `p.j))
+    ::  set tags on all subscriptions for this user
+    =/  ps=pusher-state:push
+      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) who ~)
+    =/  tag-cards=(list card)
+      %+  turn  ~(tap by inner)
+      |=  [id=@ta ts=tagged-sub:push]
+      =/  pt=push-set-tags:push  [who id tags]
+      [%pass /push/tags %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
+    :_  this
+    (welp tag-cards (ok-cards eyre-id))
+  ::
   :_  this
   (give-simple-payload:app:server eyre-id not-found:gen:server)
+  ::
+  ++  ok-cards
+    |=  eyre-id=@ta
+    ^-  (list card)
+    %+  give-simple-payload:app:server  eyre-id
+    %-  json-response:gen:server
+    o+(malt ~[['ok' b+&]])
   ::
   ++  icon-response
     ^-  simple-payload:http
@@ -451,7 +621,7 @@
         var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
         var sub = await reg.pushManager.getSubscription();
         if (!sub) { sel.value = "off"; return; }
-        var cr = await fetch("/apps/notifchat/~web-pusher/check-sub", {
+        var cr = await fetch("/apps/notifchat?action=push-check-sub", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({endpoint: sub.endpoint})
@@ -462,7 +632,7 @@
           sel.value = "off";
           return;
         }
-        var pr = await fetch("/apps/notifchat/~web-pusher/prefs");
+        var pr = await fetch("/apps/notifchat?action=push-prefs");
         var prefs = await pr.json();
         if (prefs.includes("mention")) sel.value = "mention";
         else sel.value = "all";
@@ -490,7 +660,7 @@
       var p256dh = bufToB64Url(sub.getKey("p256dh"));
       var auth = bufToB64Url(sub.getKey("auth"));
       var id = "b-" + Date.now();
-      var r = await fetch("/apps/notifchat/~web-pusher/subscribe", {
+      var r = await fetch("/apps/notifchat?action=push-subscribe", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({id: id, endpoint: sub.endpoint, p256dh: p256dh, auth: auth})
@@ -505,7 +675,7 @@
       if (sub) await sub.unsubscribe();
       var id = localStorage.getItem("push-sub-id");
       if (id) {
-        await fetch("/apps/notifchat/~web-pusher/unsubscribe", {
+        await fetch("/apps/notifchat?action=push-unsubscribe", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({id: id})
@@ -514,7 +684,7 @@
       }
     }
     async function setPrefs(tags) {
-      await fetch("/apps/notifchat/~web-pusher/prefs", {
+      await fetch("/apps/notifchat?action=push-prefs", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({tags: tags})
