@@ -380,18 +380,18 @@
     (a-co:co n)
   ::
   ++  head-marl
-    |=  extra=marl
     ^-  marl
-    =/  base=marl
-      ;=
-        ;meta(charset "utf-8");
-        ;meta(name "viewport", content "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
-        ;meta(name "apple-mobile-web-app-status-bar-style", content "black-translucent");
-        ;title: Notifchat
-        ;link(rel "icon", href "/apps/notifchat/icon.svg", type "image/svg+xml");
-        ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
-      ==
-    (weld base extra)
+    ;=
+      ;meta(charset "utf-8");
+      ;meta(name "viewport", content "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
+      ;meta(name "apple-mobile-web-app-status-bar-style", content "black-translucent");
+      ;title: Notifchat
+      ;link(rel "icon", href "/apps/notifchat/icon.svg", type "image/svg+xml");
+      ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
+      ;link(rel "manifest", href "/apps/notifchat/manifest.json");
+      ;script(type "module", src "/apps/notifchat/datastar.js");
+      ;script(type "module", src "/apps/notifchat/pwa-gate.js");
+    ==
   ::
   ++  page-manx
     |=  who=@p
@@ -399,12 +399,7 @@
     =/  hr  ~(. href:ds /apps/notifchat ~)
     ;html
       ;head
-        ;*  %-  head-marl
-            ;=
-              ;link(rel "manifest", href "/apps/notifchat/manifest.json");
-              ;script(type "module", src "/apps/notifchat/datastar.js");
-              ;script(type "module", src "/apps/notifchat/pwa-gate.js");
-            ==
+        ;*  head-marl
       ==
       ;body
         ;pwa-gate(name "Notifchat")
@@ -434,17 +429,19 @@
     ^-  manx
     ;html
       ;head
-        ;*  (head-marl ~)
+        ;*  head-marl
       ==
       ;body
-        ;div.login-page
-          ;div.login-card
-            ;p.login-prompt: login with your planet
-            ;form.login-form(method "POST", action "/~/login", autocomplete "off")
-              ;input(type "hidden", name "redirect", value "/apps/notifchat");
-              ;input(type "hidden", name "eauth", value "");
-              ;input.login-name(type "text", name "name", placeholder "~sampel-palnet", autocomplete "off", autofocus "", data-1p-ignore "", data-lpignore "true", data-form-type "other");
-              ;button.login-submit(type "submit"): login
+        ;pwa-gate(name "Notifchat")
+          ;div.login-page
+            ;div.login-card
+              ;p.login-prompt: login with your planet
+              ;form.login-form(method "POST", action "/~/login", autocomplete "off")
+                ;input(type "hidden", name "redirect", value "/apps/notifchat");
+                ;input(type "hidden", name "eauth", value "");
+                ;input.login-name(type "text", name "name", placeholder "~sampel-palnet", autocomplete "off", autofocus "", data-1p-ignore "", data-lpignore "true", data-form-type "other");
+                ;button.login-submit(type "submit"): login
+              ==
             ==
           ==
         ==
