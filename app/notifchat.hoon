@@ -8,6 +8,7 @@
 /*  datastar-js    %js   /lib/web/datastar/js
 /*  pwa-gate-js    %js   /lib/web/pwa-gate/js
 /*  notifchat-js   %js   /lib/web/notifchat/js
+/*  urbit-time-js  %js   /lib/web/urbit-time/js
 /*  notifchat-css  %css  /lib/web/notifchat/css
 ::
 |%
@@ -114,6 +115,7 @@
       [%apps %notifchat %'datastar.js' ~]   `['application/javascript' datastar-js]
       [%apps %notifchat %'pwa-gate.js' ~]   `['application/javascript' pwa-gate-js]
       [%apps %notifchat %'notifchat.js' ~]  `['application/javascript' notifchat-js]
+      [%apps %notifchat %'urbit-time.js' ~]  `['application/javascript' urbit-time-js]
       [%apps %notifchat %'notifchat.css' ~]  `['text/css' notifchat-css]
     ==
   ?:  &(=('GET' meth) ?=(^ static))
@@ -354,7 +356,7 @@
             ;div.msg-header
               ;span.author: {(cite:title author.m)}
               ;hr;
-              ;span.time: {(format-time sent-at.m)}
+              ;urbit-time(da "{(scow %da sent-at.m)}");
             ==
             ;div.text
               ;*  (render-segments parts.m)
@@ -374,17 +376,6 @@
         ;span.mention: {(cite:title +.s)}
     ==
   ::
-  ++  format-time
-    |=  t=@da
-    ^-  tape
-    =/  d  (yore t)
-    ;:(welp (zero-pad h.t.d) ":" (zero-pad m.t.d))
-  ::
-  ++  zero-pad
-    |=  n=@
-    ^-  tape
-    ?:  (lth n 10)  (welp "0" (a-co:co n))
-    (a-co:co n)
   ::
   ++  head-marl
     ^-  marl
@@ -399,6 +390,7 @@
       ;link(rel "manifest", href "/apps/notifchat/manifest.json");
       ;script(type "module", src (versioned "/apps/notifchat/datastar.js" datastar-js));
       ;script(type "module", src (versioned "/apps/notifchat/pwa-gate.js" pwa-gate-js));
+      ;script(src (versioned "/apps/notifchat/urbit-time.js" urbit-time-js));
     ==
   ::
   ++  page-manx

@@ -417,7 +417,7 @@ header {
   color: var(--highlight);
 }
 
-.msg .time {
+.msg urbit-time {
   font-size: 0.8rem;
   color: var(--text-faint);
   white-space: nowrap;
