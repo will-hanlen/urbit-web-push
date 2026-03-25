@@ -372,19 +372,44 @@ header {
   overscroll-behavior: contain;
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+#messages {
+  animation: fade-in 0.3s ease;
+}
+
 .msg {
   margin-bottom: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.msg-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.msg-header hr {
+  flex: 1;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border-muted) 50%, transparent);
+  margin: 0;
 }
 
 .msg .author {
-  font-weight: 600;
-  font-size: 0.85rem;
-  margin-right: 0.5rem;
-  color: var(--text-strong);
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .msg .text {
   font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .mention {
@@ -402,32 +427,63 @@ header {
 }
 
 .msg .time {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-faint);
+  white-space: nowrap;
 }
 
 form {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  padding-bottom: 1.5rem;
-  border-top: 1px solid var(--border);
+  flex-direction: column;
   flex-shrink: 0;
+  position: relative;
   background: var(--bg-raised);
 }
 
-form input {
-  flex: 1;
-  padding: 0.5rem;
-  border: 1px solid var(--border-muted);
-  border-radius: 4px;
-  font-size: 16px;
-  font-family: inherit;
-  background: var(--bg-input);
-  color: var(--text);
+.resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 12px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--border);
+  touch-action: none;
 }
 
-form input.sending {
+.resize-handle .grip {
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-muted);
+}
+
+form textarea {
+  width: 100%;
+  min-height: 5rem;
+  max-height: 60vh;
+  padding: 0.5rem 1rem;
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  border: none;
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--bg-raised);
+  color: var(--text);
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+form textarea::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+form textarea:focus {
+  outline: none;
+}
+
+form textarea.sending {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -436,16 +492,28 @@ form .send-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.7rem;
+  height: 2.7rem;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: var(--accent);
   color: var(--bg);
   cursor: pointer;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  right: 0.75rem;
+  transform: translateY(-50%);
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+
+
+form .send-btn svg {
+  display: block;
+  stroke: currentColor;
+  stroke-width: 1px;
 }
 
 form .send-btn:disabled {

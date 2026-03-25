@@ -343,11 +343,11 @@
       ;*  %+  turn  (flop (scag 100 msgs))
           |=  m=message:notifchat
           ;div.msg
-            ;span.author
-              =class  ?:(=(%pawn (clan:title author.m)) "author comet" "author")
-              ; {(cite:title author.m)}
+            ;div.msg-header
+              ;span.author: {(cite:title author.m)}
+              ;hr;
+              ;span.time: {(format-time sent-at.m)}
             ==
-            ;span.time: {(format-time sent-at.m)}
             ;div.text
               ;*  (render-segments parts.m)
             ==
@@ -411,22 +411,52 @@
               ;span.error-msg;
               ;button.error-dismiss(data-on-click "el.parentElement.classList.remove('visible')"): x
             ==
-            ;div#messages: loading...
+            ;div#messages;
             ;form
               =data-signals  "\{'_sending': false}"
               =data-on-submit  (data-post:hr / [["action" "send"]]~)
               =data-indicator  "_sending"
-              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-class-sending "$_sending", data-on-effect "if(!$_sending) el.focus()");
-              ;button.send-btn(type "submit", data-attr-disabled "$_sending")
+              ;div.resize-handle
+                ;div.grip;
+              ==
+              ;button.send-btn
+                =type  "submit"
+                =data-attr-disabled  "$_sending"
                 ;svg
                   =xmlns  "http://www.w3.org/2000/svg"
                   =viewBox  "0 0 20 20"
                   =fill  "currentColor"
                   =width  "20"
                   =height  "20"
-                  ;path(fill-rule "evenodd", d "M3 10a.75.75 0 0 1 .75-.75h10.638l-3.96-3.71a.75.75 0 1 1 1.024-1.096l5.25 4.916a.75.75 0 0 1 0 1.096l-5.25 4.916a.75.75 0 1 1-1.024-1.096l3.96-3.71H3.75A.75.75 0 0 1 3 10Z", clip-rule "evenodd");
+                  ;+  =/  d=tape
+                        ;:  weld
+                          "M3 10a.75.75 0 0 1 .75-.75h10.638"
+                          "l-3.96-3.71a.75.75 0 1 1 1.024-1.0"
+                          "96l5.25 4.916a.75.75 0 0 1 0 1.096"
+                          "l-5.25 4.916a.75.75 0 1 1-1.024-1."
+                          "096l3.96-3.71H3.75A.75.75 0 0 1 3 "
+                          "10Z"
+                        ==
+                      ^-  manx
+                      :_  ~
+                      :_  :~  [%fill-rule "evenodd"]
+                              [%clip-rule "evenodd"]
+                              [%d d]
+                          ==
+                      %path
                 ==
               ==
+              ;+  ^-  manx
+                  :_  ~
+                  :_  :~  [%id "input"]
+                          [%placeholder "reply..."]
+                          [%autocomplete "off"]
+                          [%rows "2"]
+                          [%data-bind-text ""]
+                          [%data-class-sending "$_sending"]
+                          [%data-on-effect "if(!$_sending) el.focus()"]
+                      ==
+                  %textarea
             ==
           ==
         ==
