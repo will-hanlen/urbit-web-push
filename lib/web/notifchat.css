@@ -103,6 +103,7 @@ header {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
   border-bottom: 1px solid var(--border);
   gap: 0.5rem;
   flex-shrink: 0;
@@ -324,8 +325,8 @@ header {
 #error-banner {
   display: none;
   padding: 0.5rem 0.75rem;
-  padding-left: calc(0.75rem + env(safe-area-inset-left, 0px));
-  padding-right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   background: var(--error-bg);
   border-bottom: 1px solid var(--error-border);
   color: var(--error-text);
@@ -409,7 +410,7 @@ form {
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px) * 0.8);
+  padding-bottom: 0.75rem;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--bg-raised);
@@ -521,4 +522,10 @@ form button {
 
 .login-submit:hover {
   background: var(--accent-hover);
+}
+
+@media (display-mode: standalone) {
+  form {
+    padding-bottom: 1.5rem;
+  }
 }
