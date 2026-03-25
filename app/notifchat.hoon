@@ -367,7 +367,7 @@
             =data-signals  "\{'text': '', '_menuOpen': false}"
             =data-on-load       "{(data-get:hr / [["action" "sse"]]~)}"
             ;+  (header-manx who)
-            ;div#error-banner
+            ;div#error-banner(style "display:none")
               ;span.error-msg;
               ;button.error-dismiss(data-on-click "el.parentElement.classList.remove('visible')"): x
             ==
