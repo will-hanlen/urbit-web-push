@@ -322,8 +322,8 @@
         "short_name": "Notifchat",
         "start_url": "/apps/notifchat",
         "display": "standalone",
-        "background_color": "#c8dede",
-        "theme_color": "#7aadad",
+        "background_color": "#1f2f2f",
+        "theme_color": "#1f2f2f",
         "icons": [
           {
             "src": "/apps/notifchat/icon.svg",
@@ -384,7 +384,8 @@
     ;=
       ;meta(charset "utf-8");
       ;meta(name "viewport", content "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
-      ;meta(name "apple-mobile-web-app-status-bar-style", content "black-translucent");
+      ;meta(name "theme-color", content "#e8f1f1", media "(prefers-color-scheme: light)");
+      ;meta(name "theme-color", content "#1f2f2f", media "(prefers-color-scheme: dark)");
       ;title: Notifchat
       ;link(rel "icon", href "/apps/notifchat/icon.svg", type "image/svg+xml");
       ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
