@@ -356,7 +356,7 @@
             ;div.msg-header
               ;span.author: {(cite:title author.m)}
               ;hr;
-              ;urbit-time(da "{(scow %da sent-at.m)}");
+              ;urbit-time(da "{(scow %da sent-at.m)}", data-ignore-morph "");
             ==
             ;div.text
               ;*  (render-segments parts.m)
