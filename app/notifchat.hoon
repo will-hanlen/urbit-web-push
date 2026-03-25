@@ -14,6 +14,7 @@
 +$  card  card:agent:gall
 ++  max-msgs      200        ::  message history limit
 ++  max-msg-size  1.024      ::  max message bytes
+++  keepalive-freq  ~s30     ::  SSE keepalive interval
 +$  versioned-state
   $%  [%0 state-0]
   ==
@@ -112,8 +113,11 @@
   ::  SSE connection
   ::
   ?:  &(=('GET' meth) =('sse' action))
+    =/  need-timer  =(~ sessions)
     =.  sessions  (~(put in sessions) eyre-id)
     :_  this
+    %+  welp
+      ?.(need-timer ~ ~[[%pass /keepalive %arvo %b %wait (add now.bowl keepalive-freq)]])
     %^  open-sse-conn:ds  eyre-id  ~
     ~[["outer" ~ (messages-manx msgs.state)]]
   ::  send message
@@ -321,7 +325,7 @@
   ++  messages-manx
     |=  msgs=(list message:notifchat)
     ^-  manx
-    ;div#messages
+    ;div#messages(data-on-load "el.scrollTop = el.scrollHeight")
       ;*  %+  turn  (flop msgs)
           |=  m=message:notifchat
           ;div.msg
@@ -362,7 +366,8 @@
     ;html
       ;head
         ;meta(charset "utf-8");
-        ;meta(name "viewport", content "width=device-width, initial-scale=1");
+        ;meta(name "viewport", content "width=device-width, initial-scale=1, viewport-fit=cover");
+        ;meta(name "apple-mobile-web-app-status-bar-style", content "black-translucent");
         ;title: Notifchat
         ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
         ;link(rel "manifest", href "/apps/notifchat/manifest.json");
@@ -381,7 +386,7 @@
               =data-signals  "\{'_sending': false}"
               =data-on-submit  (data-post:hr / [["action" "send"]]~)
               =data-indicator  "_sending"
-              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-class-sending "$_sending");
+              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-class-sending "$_sending", data-on-effect "if(!$_sending) el.focus()");
               ;button(type "submit", data-attr-disabled "$_sending"): send
             ==
           ==
@@ -441,6 +446,14 @@
 ++  on-arvo
   |=  [=wire =sign-arvo]
   ^-  (quip card _this)
-  `this
+  ?+  wire  `this
+    [%keepalive ~]
+      ?.  ?=([%behn %wake *] sign-arvo)  `this
+      ?:  =(~ sessions)  `this
+      :_  this
+      :*  [%pass /keepalive %arvo %b %wait (add now.bowl keepalive-freq)]
+          (keepalive-sse-all:ds sessions)
+      ==
+  ==
 ++  on-fail   on-fail:def
 --

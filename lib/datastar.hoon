@@ -239,6 +239,20 @@
   ^-  card:agent:gall
   [%give %fact ~[/http-response/[eyre-id]] [%http-response-data !>(`octs)]]
 ::
+::  +keepalive-sse-all: send an SSE comment to all open connections
+::
+::  SSE comments (lines starting with ':') are ignored by the browser
+::  but keep the TCP connection from timing out.
+::
+++  keepalive-sse-all
+  |=  ids=(set @ta)
+  ^-  (list card:agent:gall)
+  =/  =octs  (as-octs:mimes:html ': keepalive\0a\0a')
+  %+  turn  ~(tap in ids)
+  |=  eyre-id=@ta
+  ^-  card:agent:gall
+  [%give %fact ~[/http-response/[eyre-id]] [%http-response-data !>(`octs)]]
+::
 ::  +close-sse-conn: kick an open SSE connection closed
 ::
 ++  close-sse-conn
