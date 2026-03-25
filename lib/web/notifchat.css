@@ -126,6 +126,9 @@ header {
 }
 
 #notif-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.85rem;
   padding: 0.35rem 0.6rem;
   height: 2rem;
@@ -137,6 +140,10 @@ header {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: border-color 0.15s, background 0.15s;
+}
+
+.bell-icon {
+  flex-shrink: 0;
 }
 
 #notif-mode:hover {
@@ -196,7 +203,7 @@ header {
   width: 100%;
   text-align: left;
   font-size: 0.85rem;
-  color: var(--text);
+  color: var(--text-muted);
   background: none;
   border: none;
   cursor: pointer;
@@ -204,6 +211,13 @@ header {
   border-radius: 4px;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
+}
+
+.notif-dropdown[data-active="off"] .notif-option[data-mode="off"],
+.notif-dropdown[data-active="mention"] .notif-option[data-mode="mention"],
+.notif-dropdown[data-active="all"] .notif-option[data-mode="all"] {
+  font-weight: 600;
+  color: var(--text-strong);
 }
 
 .notif-option:hover {
@@ -462,9 +476,10 @@ form button {
 }
 
 .login-prompt {
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: var(--text-muted);
   margin-bottom: 1.25rem;
+  text-align: center;
 }
 
 .login-form {

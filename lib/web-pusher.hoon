@@ -11,9 +11,9 @@
 ::    /+  web-pusher, default-agent
 ::    ...
 ::    %-  %:  agent:web-pusher
-::          /apps/my-app
-::          'mailto:admin@example.com'
-::          200
+::          /apps/my-app            ::  base path
+::          'mailto:admin@example.com'  ::  VAPID mailto
+::          200                     ::  max-sends
 ::        ==
 ::    ^-  agent:gall
 ::    |_  =bowl:gall
@@ -95,7 +95,7 @@
   '''
 |%
 ++  agent
-  |=  [base=path sub-id=@t max-sends=@ud]
+  |=  [base=path mailto=@t max-sends=@ud]
   |=  =agent:gall
   ^-  agent:gall
   =|  pstate=pusher-state
@@ -109,7 +109,7 @@
   ++  on-init
     ^-  (quip card:agent:gall agent:gall)
     =.  config.pstate
-      (some (generate-vapid-keypair:web-push eny.bowl sub-id))
+      (some (generate-vapid-keypair:web-push eny.bowl mailto))
     =^  cards  agent  on-init:ag
     :_  this
     :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
@@ -118,54 +118,67 @@
   ::
   ++  on-save
     ^-  vase
-    !>([%web-pusher pstate on-save:ag])
+    !>([%web-pusher %1 pstate on-save:ag])
   ::
   ++  on-load
     |=  old-state=vase
     ^-  (quip card:agent:gall agent:gall)
-    =/  old=(unit [%web-pusher pusher-state vase])
+    ::  try current versioned state
+    ::
+    =/  cur=(unit [%web-pusher %1 pusher-state vase])
       %-  mole  |.
-      !<([%web-pusher pusher-state vase] old-state)
-    ?~  old
-      ::  state doesn't match current schema -- try migration
-      ::
-      =/  old-v0=(unit [%web-pusher old-pusher-state vase])
-        %-  mole  |.
-        !<([%web-pusher old-pusher-state vase] old-state)
-      ?~  old-v0
-        ::  can't migrate, reinitialize
-        ::
-        on-init
-      =/  [%web-pusher ops=old-pusher-state inner=vase]  u.old-v0
-      ::  migrate: convert subscription -> tagged-sub, merge prefs
-      ::
-      =/  new-subs=(map @p (map @ta tagged-sub))
-        %-  ~(run by subs.ops)
-        |=  inner=(map @ta subscription)
-        ^-  (map @ta tagged-sub)
-        (~(run by inner) |=(s=subscription [sub=s tags=~]))
-      ::  apply old prefs to all subscriptions for each ship
-      ::
-      =.  new-subs
-        %-  ~(rep by prefs.ops)
-        |=  [[=ship tags=(set term)] acc=(map @p (map @ta tagged-sub))]
-        =/  inner=(map @ta tagged-sub)  (~(gut by acc) ship ~)
-        %+  ~(put by acc)  ship
-        (~(run by inner) |=(ts=tagged-sub ts(tags tags)))
-      =.  pstate
-        :*  config.ops
-            new-subs
-            send-order.ops
-            sends.ops
-            next-id.ops
-        ==
-      =^  cards  agent  (on-load:ag inner)
+      !<([%web-pusher %1 pusher-state vase] old-state)
+    ?^  cur
+      =.  pstate  +>-.u.cur
+      =^  cards  agent  (on-load:ag +>+.u.cur)
       :_  this
       :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
           cards
       ==
-    =/  [%web-pusher ps=pusher-state inner=vase]  u.old
-    =.  pstate  ps
+    ::  try unversioned pusher-state (pre-versioning)
+    ::
+    =/  old-uv=(unit [%web-pusher pusher-state vase])
+      %-  mole  |.
+      !<([%web-pusher pusher-state vase] old-state)
+    ?^  old-uv
+      =.  pstate  +<.u.old-uv
+      =^  cards  agent  (on-load:ag +>.u.old-uv)
+      :_  this
+      :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
+          cards
+      ==
+    ::  try v0 (subscription without tags, separate prefs map)
+    ::
+    =/  old-v0=(unit [%web-pusher old-pusher-state vase])
+      %-  mole  |.
+      !<([%web-pusher old-pusher-state vase] old-state)
+    ?~  old-v0
+      ::  unrecognized state -- crash rather than silently lose VAPID keys
+      ::
+      ~|(%web-pusher-unknown-state !!)
+    =/  [%web-pusher ops=old-pusher-state inner=vase]  u.old-v0
+    ::  migrate: convert subscription -> tagged-sub, merge prefs
+    ::
+    =/  new-subs=(map @p (map @ta tagged-sub))
+      %-  ~(run by subs.ops)
+      |=  inner=(map @ta subscription)
+      ^-  (map @ta tagged-sub)
+      (~(run by inner) |=(s=subscription [sub=s tags=~]))
+    ::  apply old prefs to all subscriptions for each ship
+    ::
+    =.  new-subs
+      %-  ~(rep by prefs.ops)
+      |=  [[=ship tags=(set term)] acc=(map @p (map @ta tagged-sub))]
+      =/  inner=(map @ta tagged-sub)  (~(gut by acc) ship ~)
+      %+  ~(put by acc)  ship
+      (~(run by inner) |=(ts=tagged-sub ts(tags tags)))
+    =.  pstate
+      :*  config.ops
+          new-subs
+          send-order.ops
+          sends.ops
+          next-id.ops
+      ==
     =^  cards  agent  (on-load:ag inner)
     :_  this
     :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
@@ -428,7 +441,7 @@
     ?:  =(201 status)
       `(update-delivery key %sent)
     ?:  |(=(410 status) =(404 status))
-      =/  ds=delivery-status  ?:(=(410 status) %expired %gone)
+      =/  ds=delivery-status  ?:(=(410 status) %gone %expired)
       =/  ps  (update-delivery key ds)
       ::  remove the specific subscription
       ::
@@ -632,7 +645,7 @@
   ++  err-cards
     |=  [eyre-id=@ta code=@ud msg=@t]
     ^-  (list card:agent:gall)
-    =/  bod=json  [%o (~(gas by *(map @t json)) ~[['error' [%s msg]]])]
+    =/  bod=json  [%o (malt `(list [@t json])`~[['error' [%s msg]]])]
     %+  give-simple-payload:app:server  eyre-id
     [[code [['content-type' 'application/json'] ~]] `(json-to-octs:server bod)]
   --
