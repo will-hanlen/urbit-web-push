@@ -109,14 +109,15 @@
     :_(this (payload-cards:ds eyre-id icon-response))
   ?:  &(=('GET' meth) =(/apps/notifchat/'manifest.json' site))
     :_(this (payload-cards:ds eyre-id manifest-response))
-  ?:  &(=('GET' meth) =(/apps/notifchat/'datastar.js' site))
-    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' datastar-js))
-  ?:  &(=('GET' meth) =(/apps/notifchat/'pwa-gate.js' site))
-    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' pwa-gate-js))
-  ?:  &(=('GET' meth) =(/apps/notifchat/'notifchat.js' site))
-    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' notifchat-js))
-  ?:  &(=('GET' meth) =(/apps/notifchat/'notifchat.css' site))
-    :_(this (resource-payload-cards:ds eyre-id `~d7 'text/css' notifchat-css))
+  =/  static=(unit [@t @])
+    ?+  site  ~
+      [%apps %notifchat %'datastar.js' ~]   `['application/javascript' datastar-js]
+      [%apps %notifchat %'pwa-gate.js' ~]   `['application/javascript' pwa-gate-js]
+      [%apps %notifchat %'notifchat.js' ~]  `['application/javascript' notifchat-js]
+      [%apps %notifchat %'notifchat.css' ~]  `['text/css' notifchat-css]
+    ==
+  ?:  &(=('GET' meth) ?=(^ static))
+    :_(this (resource-payload-cards:ds eyre-id `~d7 -.u.static +.u.static))
   ::  authenticated routes (moons and above)
   ::
   ?:  =(%pawn (clan:title src.bowl))
