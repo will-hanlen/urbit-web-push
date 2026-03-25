@@ -96,9 +96,16 @@
   });
   self.addEventListener("notificationclick", function(event) {
     event.notification.close();
-    if (event.notification.data && event.notification.data.url) {
-      event.waitUntil(clients.openWindow(event.notification.data.url));
-    }
+    var url = event.notification.data && event.notification.data.url;
+    if (!url) return;
+    event.waitUntil(
+      clients.matchAll({type: "window"}).then(function(list) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].url.indexOf(url) !== -1 && list[i].focus) return list[i].focus();
+        }
+        return clients.openWindow(url);
+      })
+    );
   });
   '''
 |%

@@ -137,90 +137,54 @@
   ::  push-subscribe: register browser push subscription
   ::
   ?:  &(=('POST' meth) =('push-subscribe' action))
-    ?~  body.request.inbound-request
-      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
-    =/  bod  q.u.body.request.inbound-request
-    =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
-    =/  obj  p.u.jon
-    =/  id-j  (~(get by obj) 'id')
-    =/  ep-j  (~(get by obj) 'endpoint')
-    =/  dh-j  (~(get by obj) 'p256dh')
-    =/  au-j  (~(get by obj) 'auth')
-    =/  tags-j  (~(get by obj) 'tags')
-    ?.  ?&  ?=(^ id-j)  ?=(%s -.u.id-j)
-            ?=(^ ep-j)  ?=(%s -.u.ep-j)
-            ?=(^ dh-j)  ?=(%s -.u.dh-j)
-            ?=(^ au-j)  ?=(%s -.u.au-j)
-        ==
+    =/  form  (form-body:ds body.request.inbound-request)
+    =/  id     (~(get by form) 'id')
+    =/  ep     (~(get by form) 'endpoint')
+    =/  dh-b6  (~(get by form) 'p256dh')
+    =/  au-b6  (~(get by form) 'auth')
+    ?.  &(?=(^ id) ?=(^ ep) ?=(^ dh-b6) ?=(^ au-b6))
       :_(this (err-payload-cards:ds eyre-id 400 'missing fields'))
-    =/  dh-octs=(unit octs)  (de-base64url:web-push p.u.dh-j)
-    =/  au-octs=(unit octs)  (de-base64url:web-push p.u.au-j)
+    =/  dh-octs=(unit octs)  (de-base64url:web-push u.dh-b6)
+    =/  au-octs=(unit octs)  (de-base64url:web-push u.au-b6)
     ?~  dh-octs  :_(this (err-payload-cards:ds eyre-id 400 'invalid p256dh'))
     ?~  au-octs  :_(this (err-payload-cards:ds eyre-id 400 'invalid auth'))
     =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
     =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
-    =/  sub=subscription:push  [p.u.ep-j dh au]
-    =/  id=@ta  `@ta`p.u.id-j
-    =/  tags=(set term)
-      ?~  tags-j  ~
-      ?.  ?=(%a -.u.tags-j)  ~
-      %-  ~(gas in *(set term))
-      %+  murn  p.u.tags-j
-      |=(j=json ?.(?=(%s -.j) ~ `p.j))
-    =/  ps=push-subscribe:push  [src.bowl id sub tags]
+    =/  sub=subscription:push  [u.ep dh au]
+    =/  tags=(set term)  (parse-tags (~(get by form) 'tags'))
+    =/  ps=push-subscribe:push  [src.bowl `@ta`u.id sub tags]
     :_  this
     :*  [%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
-        (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
+        (give-empty:ds eyre-id)
     ==
   ::  push-unsubscribe: remove browser push subscription
   ::
   ?:  &(=('POST' meth) =('push-unsubscribe' action))
-    ?~  body.request.inbound-request
-      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
-    =/  bod  q.u.body.request.inbound-request
-    =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
-    =/  id-j  (~(get by p.u.jon) 'id')
-    ?~  id-j  :_(this (err-payload-cards:ds eyre-id 400 'missing id'))
-    ?.  ?=(%s -.u.id-j)  :_(this (err-payload-cards:ds eyre-id 400 'id must be string'))
-    =/  id=@ta  `@ta`p.u.id-j
-    =/  ps=push-unsubscribe:push  [src.bowl id]
+    =/  form  (form-body:ds body.request.inbound-request)
+    =/  id  (~(get by form) 'id')
+    ?~  id  :_(this (err-payload-cards:ds eyre-id 400 'missing id'))
+    =/  ps=push-unsubscribe:push  [src.bowl `@ta`u.id]
     :_  this
     :*  [%pass /push/unsub %agent [our dap]:bowl %poke %push-unsubscribe !>(ps)]
-        (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
+        (give-empty:ds eyre-id)
     ==
   ::  push-check-sub: verify subscription exists on server
   ::
   ?:  &(=('POST' meth) =('push-check-sub' action))
-    ?~  body.request.inbound-request
-      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
-    =/  bod  q.u.body.request.inbound-request
-    =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
-    =/  ep-j  (~(get by p.u.jon) 'endpoint')
-    ?~  ep-j  :_(this (err-payload-cards:ds eyre-id 400 'missing endpoint'))
-    ?.  ?=(%s -.u.ep-j)  :_(this (err-payload-cards:ds eyre-id 400 'endpoint must be string'))
-    =/  ep=@t  p.u.ep-j
-    =/  ps=pusher-state:push
-      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) src.bowl ~)
+    =/  form  (form-body:ds body.request.inbound-request)
+    =/  ep  (~(get by form) 'endpoint')
+    ?~  ep  :_(this (err-payload-cards:ds eyre-id 400 'missing endpoint'))
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  found=?
       %+  lien  ~(val by inner)
-      |=(ts=tagged-sub:push =(endpoint.sub.ts ep))
+      |=(ts=tagged-sub:push =(endpoint.sub.ts u.ep))
     :_  this
-    ?:  found
-      (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
+    ?:  found  (give-empty:ds eyre-id)
     (err-payload-cards:ds eyre-id 404 'subscription not found')
   ::  push-prefs GET: return tags for this user's subscriptions
   ::
   ?:  &(=('GET' meth) =('push-prefs' action))
-    =/  ps=pusher-state:push
-      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) src.bowl ~)
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  all-tags=(set term)
       %-  ~(rep by inner)
       |=  [[id=@ta ts=tagged-sub:push] acc=(set term)]
@@ -230,29 +194,16 @@
   ::  push-prefs POST: update tags on all subscriptions for this user
   ::
   ?:  &(=('POST' meth) =('push-prefs' action))
-    ?~  body.request.inbound-request
-      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
-    =/  bod  q.u.body.request.inbound-request
-    =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
-    =/  tags-j  (~(get by p.u.jon) 'tags')
-    ?~  tags-j  :_(this (err-payload-cards:ds eyre-id 400 'missing tags'))
-    ?.  ?=(%a -.u.tags-j)  :_(this (err-payload-cards:ds eyre-id 400 'tags must be array'))
-    =/  tags=(set term)
-      %-  ~(gas in *(set term))
-      %+  murn  p.u.tags-j
-      |=(j=json ?.(?=(%s -.j) ~ `p.j))
-    =/  ps=pusher-state:push
-      .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) src.bowl ~)
+    =/  form  (form-body:ds body.request.inbound-request)
+    =/  tags=(set term)  (parse-tags (~(get by form) 'tags'))
+    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  tag-cards=(list card)
       %+  turn  ~(tap by inner)
       |=  [id=@ta ts=tagged-sub:push]
       =/  pt=push-set-tags:push  [src.bowl id tags]
       [%pass /push/tags %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
     :_  this
-    (welp tag-cards (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]])))
+    (welp tag-cards (give-empty:ds eyre-id))
   ::
   :_(this (not-found-cards:ds eyre-id))
   ::
@@ -294,6 +245,32 @@
       (push-sse-all:ds sessions ~ frags)
     ==
   ::
+  ++  get-pstate
+    ^-  pusher-state:push
+    .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
+  ::
+  ++  parse-tags
+    |=  tags-t=(unit @t)
+    ^-  (set term)
+    ?~  tags-t  ~
+    ?:  =('' u.tags-t)  ~
+    %-  silt
+    ^-  (list term)
+    %+  murn  (split u.tags-t ',')
+    |=(t=@t ?:(=('' t) ~ `t))
+  ::
+  ++  split
+    |=  [txt=@t del=@t]
+    ^-  (list @t)
+    =|  [acc=(list @t) buf=tape]
+    =/  chars  (trip txt)
+    |-
+    ?~  chars
+      (flop ?~(buf acc [(crip buf) acc]))
+    ?:  =(i.chars del)
+      $(acc [(crip buf) acc], buf ~, chars t.chars)
+    $(buf (snoc buf i.chars), chars t.chars)
+  ::
   ++  icon-response
     ^-  simple-payload:http
     =/  bod=@t
@@ -307,6 +284,7 @@
     =/  bod=@t
       '''
       {
+        "id": "/apps/notifchat",
         "name": "Notifchat",
         "short_name": "Notifchat",
         "start_url": "/apps/notifchat",
@@ -388,7 +366,6 @@
           ;div#app
             =data-signals  "\{'text': '', '_menuOpen': false}"
             =data-on-load       "{(data-get:hr / [["action" "sse"]]~)}"
-            =style              "display:flex;flex-direction:column;height:100vh;height:100dvh"
             ;+  (header-manx who)
             ;div#messages: loading...
             ;form
@@ -436,7 +413,7 @@
             ==
             ;button.notif-option
               =data-on-click  "$_notifOpen = false; setNotifMode('mention')"
-              ; replies
+              ; mentions
             ==
             ;button.notif-option
               =data-on-click  "$_notifOpen = false; setNotifMode('all')"
