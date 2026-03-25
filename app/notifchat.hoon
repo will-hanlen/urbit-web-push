@@ -436,35 +436,29 @@
                   =fill  "currentColor"
                   =width  "20"
                   =height  "20"
-                  ;+  =/  d=tape
-                        ;:  weld
-                          "M3 10a.75.75 0 0 1 .75-.75h10.638"
-                          "l-3.96-3.71a.75.75 0 1 1 1.024-1.0"
-                          "96l5.25 4.916a.75.75 0 0 1 0 1.096"
-                          "l-5.25 4.916a.75.75 0 1 1-1.024-1."
-                          "096l3.96-3.71H3.75A.75.75 0 0 1 3 "
-                          "10Z"
-                        ==
-                      ^-  manx
-                      :_  ~
-                      :_  :~  [%fill-rule "evenodd"]
-                              [%clip-rule "evenodd"]
-                              [%d d]
-                          ==
-                      %path
+                  ;path
+                    =fill-rule  "evenodd"
+                    =clip-rule  "evenodd"
+                    =d  "M3 10a.75.75 0 0 1 .75-.75h10.638".
+                        "l-3.96-3.71a.75.75 0 1 1 1.024-1.0".
+                        "96l5.25 4.916a.75.75 0 0 1 0 1.096".
+                        "l-5.25 4.916a.75.75 0 1 1-1.024-1.".
+                        "096l3.96-3.71H3.75A.75.75 0 0 1 3 ".
+                        "10Z"
+                    ;*  ~
+                  ==
                 ==
               ==
-              ;+  ^-  manx
-                  :_  ~
-                  :_  :~  [%id "input"]
-                          [%placeholder "reply..."]
-                          [%autocomplete "off"]
-                          [%rows "4"]
-                          [%data-bind-text ""]
-                          [%data-class-sending "$_sending"]
-                          [%data-on-effect "if(!$_sending) el.focus()"]
-                      ==
-                  %textarea
+              ;textarea
+                =id  "input"
+                =placeholder  "reply..."
+                =autocomplete  "off"
+                =rows  "4"
+                =data-bind-text  ""
+                =data-class-sending  "$_sending"
+                =data-on-effect  "if(!$_sending) el.focus()"
+                ;*  ~
+              ==
             ==
           ==
         ==
