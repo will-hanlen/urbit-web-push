@@ -15,6 +15,9 @@
 ++  max-msgs      200        ::  message history limit
 ++  max-msg-size  1.024      ::  max message bytes
 ++  keepalive-freq  ~s30     ::  SSE keepalive interval
+++  versioned                ::  append ?v={mug} for cache-busting
+  |=  [base=tape raw-file=@]
+  "{base}?v={(a-co:co (mug raw-file))}"
 +$  versioned-state
   $%  [%0 state-0]
   ==
@@ -388,10 +391,10 @@
       ;meta(name "theme-color", content "#1f2f2f", media "(prefers-color-scheme: dark)");
       ;title: Notifchat
       ;link(rel "icon", href "/apps/notifchat/icon.svg", type "image/svg+xml");
-      ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
+      ;link(rel "stylesheet", href (versioned "/apps/notifchat/notifchat.css" notifchat-css));
       ;link(rel "manifest", href "/apps/notifchat/manifest.json");
-      ;script(type "module", src "/apps/notifchat/datastar.js");
-      ;script(type "module", src "/apps/notifchat/pwa-gate.js");
+      ;script(type "module", src (versioned "/apps/notifchat/datastar.js" datastar-js));
+      ;script(type "module", src (versioned "/apps/notifchat/pwa-gate.js" pwa-gate-js));
     ==
   ::
   ++  page-manx
@@ -461,7 +464,7 @@
             ==
           ==
         ==
-        ;script(type "module", src "/apps/notifchat/notifchat.js");
+        ;script(type "module", src (versioned "/apps/notifchat/notifchat.js" notifchat-js));
       ==
     ==
   ::
