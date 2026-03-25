@@ -401,9 +401,16 @@ header {
   margin: 0;
 }
 
+urbit-patp {
+  color: var(--text-faint);
+}
+
+.msg .text urbit-patp {
+  color: var(--text-muted);
+}
+
 .msg .author {
   font-size: 0.8rem;
-  color: var(--text-faint);
   white-space: nowrap;
 }
 
@@ -411,10 +418,6 @@ header {
   font-size: 0.9rem;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.mention {
-  color: var(--highlight);
 }
 
 .msg urbit-time {

@@ -9,6 +9,9 @@
 /*  pwa-gate-js    %js   /lib/web/pwa-gate/js
 /*  notifchat-js   %js   /lib/web/notifchat/js
 /*  urbit-time-js  %js   /lib/web/urbit-time/js
+/*  urbit-sigil-gen-js  %js  /lib/web/urbit-sigil-gen/js
+/*  urbit-sigil-js  %js  /lib/web/urbit-sigil/js
+/*  urbit-patp-js   %js  /lib/web/urbit-patp/js
 /*  notifchat-css  %css  /lib/web/notifchat/css
 ::
 |%
@@ -116,6 +119,9 @@
       [%apps %notifchat %'pwa-gate.js' ~]   `['application/javascript' pwa-gate-js]
       [%apps %notifchat %'notifchat.js' ~]  `['application/javascript' notifchat-js]
       [%apps %notifchat %'urbit-time.js' ~]  `['application/javascript' urbit-time-js]
+      [%apps %notifchat %'urbit-sigil-gen.js' ~]  `['application/javascript' urbit-sigil-gen-js]
+      [%apps %notifchat %'urbit-sigil.js' ~]  `['application/javascript' urbit-sigil-js]
+      [%apps %notifchat %'urbit-patp.js' ~]  `['application/javascript' urbit-patp-js]
       [%apps %notifchat %'notifchat.css' ~]  `['text/css' notifchat-css]
     ==
   ?:  &(=('GET' meth) ?=(^ static))
@@ -354,7 +360,7 @@
           |=  m=message:notifchat
           ;div.msg
             ;div.msg-header
-              ;span.author: {(cite:title author.m)}
+              ;urbit-patp.author(patp "{(scow %p author.m)}", data-ignore-morph ""): {(cite:title author.m)}
               ;hr;
               ;urbit-time(da "{(scow %da sent-at.m)}", data-ignore-morph "");
             ==
@@ -373,7 +379,7 @@
     ?-  -.s
       %text     ;span: {(trip +.s)}
       %mention
-        ;span.mention: {(cite:title +.s)}
+        ;urbit-patp(patp (scow %p +.s), data-ignore-morph ""): {(cite:title +.s)}
     ==
   ::
   ::
@@ -391,6 +397,9 @@
       ;script(type "module", src (versioned "/apps/notifchat/datastar.js" datastar-js));
       ;script(type "module", src (versioned "/apps/notifchat/pwa-gate.js" pwa-gate-js));
       ;script(src (versioned "/apps/notifchat/urbit-time.js" urbit-time-js));
+      ;script(src (versioned "/apps/notifchat/urbit-sigil-gen.js" urbit-sigil-gen-js));
+      ;script(src (versioned "/apps/notifchat/urbit-sigil.js" urbit-sigil-js));
+      ;script(src (versioned "/apps/notifchat/urbit-patp.js" urbit-patp-js));
     ==
   ::
   ++  page-manx
