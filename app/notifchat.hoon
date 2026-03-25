@@ -4,8 +4,11 @@
 ::  subscriptions, encryption, and delivery tracking.
 ::
 /-  notifchat, push
-/+  web-pusher, web-push, default-agent, verb, server, datastar
-/*  datastar-js  %js  /lib/web/datastar/js
+/+  web-pusher, web-push, default-agent, verb, datastar
+/*  datastar-js    %js   /lib/web/datastar/js
+/*  pwa-gate-js    %js   /lib/web/pwa-gate/js
+/*  notifchat-js   %js   /lib/web/notifchat/js
+/*  notifchat-css  %css  /lib/web/notifchat/css
 ::
 |%
 +$  card  card:agent:gall
@@ -51,7 +54,7 @@
 ::
 =|  state-1
 =*  state  -
-=|  requests=(set @ta)
+=|  sessions=(set @ta)
 ::
 %+  verb  |
 %-  %:  agent:web-pusher
@@ -63,6 +66,7 @@
 |_  =bowl:gall
 +*  this  .
     def   ~(. (default-agent this %|) bowl)
+    ds    datastar
 ::
 ++  on-init   `this
 ++  on-save   !>(`versioned-state`[%1 state])
@@ -87,47 +91,12 @@
   |^
   ?:  ?=(%push-test mark)
     ?>  =(our src):bowl
-    =/  text=@t  !<(@t vase)
-    =/  parts=(list segment:notifchat)  (parse-segments text)
-    =/  msg=message:notifchat  [our.bowl text now.bowl parts]
-    =.  msgs.state
-      %+  scag  max-msgs
-      `(list message:notifchat)`[msg msgs.state]
-    =/  who-t  (trip (scot %p our.bowl))
-    =/  full  ;:(welp who-t ": " (trip text))
-    =/  title=@t
-      ?:  (lte (lent full) 80)  (crip full)
-      (crip (weld (scag 77 full) "..."))
-    =/  push-msg=push-message:push
-      [title '' ~ `'/apps/notifchat' `'message']
-    =/  mentioned=(set @p)
-      %-  ~(gas in *(set @p))
-      %+  murn  parts
-      |=  s=segment:notifchat
-      ?:(?=(%mention -.s) `+.s ~)
-    =/  excl=(set @p)
-      (~(uni in (sy our.bowl ~)) mentioned)
-    =/  broadcast=push-send:push
-      [~ (sy %message ~) excl push-msg]
-    =/  mention-targets=(set @p)
-      (~(del in mentioned) our.bowl)
-    =/  mention-cards=(list card)
-      ?:  =(~ mention-targets)  ~
-      =/  ms=push-send:push  [mention-targets ~ ~ push-msg]
-      ~[[%pass /mention %agent [our dap]:bowl %poke %push-send !>(ms)]]
-    =/  frags
-      ~[["outer" ~ (messages-manx msgs.state)]]
-    :_  this
-    ;:  welp
-      ~[[%pass /notify %agent [our dap]:bowl %poke %push-send !>(broadcast)]]
-      mention-cards
-      (push-sse-all:datastar requests ~ frags)
-    ==
+    (process-send our.bowl !<(@t vase))
   ?.  ?=(%handle-http-request mark)
     (on-poke:def mark vase)
   =+  !<([eyre-id=@ta =inbound-request:eyre] vase)
   =/  [site=path pams=(map @t @t)]
-    (parse-url:datastar url.request.inbound-request)
+    (parse-url:ds url.request.inbound-request)
   =/  meth=@t  method.request.inbound-request
   =/  action  (~(gut by pams) 'action' '')
   =/  who  src.bowl
@@ -135,97 +104,55 @@
   ::  public routes
   ::
   ?:  &(=('GET' meth) =(/apps/notifchat/'icon.svg' site))
-    :_  this
-    %+  give-simple-payload:app:server  eyre-id
-    icon-response
+    :_(this (payload-cards:ds eyre-id icon-response))
   ?:  &(=('GET' meth) =(/apps/notifchat/'manifest.json' site))
-    :_  this
-    %+  give-simple-payload:app:server  eyre-id
-    manifest-response
+    :_(this (payload-cards:ds eyre-id manifest-response))
   ?:  &(=('GET' meth) =(/apps/notifchat/'datastar.js' site))
-    :_  this
-    %+  give-simple-payload:app:server  eyre-id
-    =/  bod  (as-octs:mimes:html datastar-js)
-    =/  hed=(list [@t @t])
-      :~  ['content-type' 'application/javascript']
-          ['cache-control' 'max-age=604800']
-      ==
-    [[200 hed] `bod]
+    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' datastar-js))
+  ?:  &(=('GET' meth) =(/apps/notifchat/'pwa-gate.js' site))
+    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' pwa-gate-js))
+  ?:  &(=('GET' meth) =(/apps/notifchat/'notifchat.js' site))
+    :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' notifchat-js))
+  ?:  &(=('GET' meth) =(/apps/notifchat/'notifchat.css' site))
+    :_(this (resource-payload-cards:ds eyre-id `~d7 'text/css' notifchat-css))
   ::  main page
   ::
   ?:  &(=('GET' meth) =(site /apps/notifchat) =('' action))
-    :_  this
-    %+  give-simple-payload:app:server  eyre-id
-    (html-response:gen:server (page-html who))
+    :_(this (html-payload-cards:ds eyre-id (page-manx who)))
   ::  SSE connection
   ::
   ?:  &(=('GET' meth) =('sse' action))
-    =.  requests  (~(put in requests) eyre-id)
+    =.  sessions  (~(put in sessions) eyre-id)
     :_  this
-    %^  open-sse-conn:datastar  eyre-id  ~
+    %^  open-sse-conn:ds  eyre-id  ~
     ~[["outer" ~ (messages-manx msgs.state)]]
   ::  send message
   ::
   ?:  &(=('POST' meth) =('send' action))
-    =/  sigs
-      (datastar-signals:datastar pams body.request.inbound-request)
+    =/  sigs  (datastar-signals:ds pams body.request.inbound-request)
     =/  text  (~(gut by sigs) 'text' '')
     ?:  =('' text)
-      :_(this (give-empty:datastar eyre-id))
+      :_(this (give-empty:ds eyre-id))
     ?:  (gth (met 3 text) max-msg-size)
-      :_(this (give-empty:datastar eyre-id))
-    =/  parts=(list segment:notifchat)
-      (parse-segments text)
-    =/  msg=message:notifchat
-      [who text now.bowl parts]
-    =.  msgs.state
-      %+  scag  max-msgs
-      `(list message:notifchat)`[msg msgs.state]
-    ::  build push notification
-    =/  who-t  (trip (scot %p who))
-    =/  full  ;:(welp who-t ": " (trip text))
-    =/  title=@t
-      ?:  (lte (lent full) 80)  (crip full)
-      (crip (weld (scag 77 full) "..."))
-    =/  push-msg
-      [title '' ~ `'/apps/notifchat' `'message']
-    ::  extract @p mentions from parts
-    =/  mentioned=(set @p)
-      %-  ~(gas in *(set @p))
-      %+  murn  parts
-      |=  s=segment:notifchat
-      ?:(?=(%mention -.s) `+.s ~)
-    ::  broadcast non-mentioned with %message tag
-    =/  excl=(set @p)
-      (~(uni in (sy who ~)) mentioned)
-    =/  broadcast=push-send:push
-      [~ (sy %message ~) excl push-msg]
-    ::  targeted send to mentioned ships
-    =/  mention-targets=(set @p)
-      (~(del in mentioned) who)
-    =/  mention-cards=(list card)
-      ?:  =(~ mention-targets)  ~
-      =/  ms=push-send:push
-        [mention-targets ~ ~ push-msg]
-      ~[[%pass /mention %agent [our dap]:bowl %poke %push-send !>(ms)]]
-    =/  frags
-      ~[["outer" ~ (messages-manx msgs.state)]]
+      :_(this (give-empty:ds eyre-id))
+    =/  [cards=(list card) =_this]  (process-send who text)
     :_  this
     ;:  welp
-      ~[[%pass /notify %agent [our dap]:bowl %poke %push-send !>(broadcast)]]
-      mention-cards
-      (give-sse:datastar eyre-id ~[['text' '']] ~)
-      (push-sse-all:datastar requests ~ frags)
+      cards
+      (give-empty:ds eyre-id)
+      (push-sse-all:ds sessions ~[['text' '']] ~)
     ==
-::  push-subscribe: register browser push subscription
+  ::  push-subscribe: register browser push subscription
   ::
   ?:  &(=('POST' meth) =('push-subscribe' action))
     ?.  allowed
-      :_(this (err-cards eyre-id 403 'not authenticated'))
-    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+      :_(this (err-payload-cards:ds eyre-id 403 'not authenticated'))
+    ?~  body.request.inbound-request
+      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
+    =/  bod  q.u.body.request.inbound-request
     =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
     =/  obj  p.u.jon
     =/  id-j  (~(get by obj) 'id')
     =/  ep-j  (~(get by obj) 'endpoint')
@@ -237,11 +164,11 @@
             ?=(^ dh-j)  ?=(%s -.u.dh-j)
             ?=(^ au-j)  ?=(%s -.u.au-j)
         ==
-      :_(this (err-cards eyre-id 400 'missing fields'))
+      :_(this (err-payload-cards:ds eyre-id 400 'missing fields'))
     =/  dh-octs=(unit octs)  (de-base64url:web-push p.u.dh-j)
     =/  au-octs=(unit octs)  (de-base64url:web-push p.u.au-j)
-    ?~  dh-octs  :_(this (err-cards eyre-id 400 'invalid p256dh'))
-    ?~  au-octs  :_(this (err-cards eyre-id 400 'invalid auth'))
+    ?~  dh-octs  :_(this (err-payload-cards:ds eyre-id 400 'invalid p256dh'))
+    ?~  au-octs  :_(this (err-payload-cards:ds eyre-id 400 'invalid auth'))
     =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
     =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
     =/  sub=subscription:push  [p.u.ep-j dh au]
@@ -255,38 +182,42 @@
     =/  ps=push-subscribe:push  [who id sub tags]
     :_  this
     :*  [%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
-        (ok-cards eyre-id)
+        (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
     ==
   ::  push-unsubscribe: remove browser push subscription
   ::
   ?:  &(=('POST' meth) =('push-unsubscribe' action))
     ?.  allowed
-      :_(this (err-cards eyre-id 403 'not authenticated'))
-    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+      :_(this (err-payload-cards:ds eyre-id 403 'not authenticated'))
+    ?~  body.request.inbound-request
+      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
+    =/  bod  q.u.body.request.inbound-request
     =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
     =/  id-j  (~(get by p.u.jon) 'id')
-    ?~  id-j  :_(this (err-cards eyre-id 400 'missing id'))
-    ?.  ?=(%s -.u.id-j)  :_(this (err-cards eyre-id 400 'id must be string'))
+    ?~  id-j  :_(this (err-payload-cards:ds eyre-id 400 'missing id'))
+    ?.  ?=(%s -.u.id-j)  :_(this (err-payload-cards:ds eyre-id 400 'id must be string'))
     =/  id=@ta  `@ta`p.u.id-j
     =/  ps=push-unsubscribe:push  [who id]
     :_  this
     :*  [%pass /push/unsub %agent [our dap]:bowl %poke %push-unsubscribe !>(ps)]
-        (ok-cards eyre-id)
+        (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
     ==
   ::  push-check-sub: verify subscription exists on server
   ::
   ?:  &(=('POST' meth) =('push-check-sub' action))
     ?.  allowed
-      :_(this (err-cards eyre-id 403 'not authenticated'))
-    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+      :_(this (err-payload-cards:ds eyre-id 403 'not authenticated'))
+    ?~  body.request.inbound-request
+      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
+    =/  bod  q.u.body.request.inbound-request
     =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
     =/  ep-j  (~(get by p.u.jon) 'endpoint')
-    ?~  ep-j  :_(this (err-cards eyre-id 400 'missing endpoint'))
-    ?.  ?=(%s -.u.ep-j)  :_(this (err-cards eyre-id 400 'endpoint must be string'))
+    ?~  ep-j  :_(this (err-payload-cards:ds eyre-id 400 'missing endpoint'))
+    ?.  ?=(%s -.u.ep-j)  :_(this (err-payload-cards:ds eyre-id 400 'endpoint must be string'))
     =/  ep=@t  p.u.ep-j
     =/  ps=pusher-state:push
       .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
@@ -296,42 +227,40 @@
       |=(ts=tagged-sub:push =(endpoint.sub.ts ep))
     :_  this
     ?:  found
-      (ok-cards eyre-id)
-    (err-cards eyre-id 404 'subscription not found')
+      (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]]))
+    (err-payload-cards:ds eyre-id 404 'subscription not found')
   ::  push-prefs GET: return tags for this user's subscriptions
   ::
   ?:  &(=('GET' meth) =('push-prefs' action))
     ?.  allowed
-      :_(this (err-cards eyre-id 403 'not authenticated'))
+      :_(this (err-payload-cards:ds eyre-id 403 'not authenticated'))
     =/  ps=pusher-state:push
       .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
     =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) who ~)
-    ::  collect union of all tags across this user's subscriptions
     =/  all-tags=(set term)
       %-  ~(rep by inner)
       |=  [[id=@ta ts=tagged-sub:push] acc=(set term)]
       (~(uni in acc) tags.ts)
     =/  arr=json  [%a (turn ~(tap in all-tags) |=(t=term [%s t]))]
-    :_  this
-    %+  give-simple-payload:app:server  eyre-id
-    (json-response:gen:server arr)
+    :_(this (json-payload-cards:ds eyre-id arr))
   ::  push-prefs POST: update tags on all subscriptions for this user
   ::
   ?:  &(=('POST' meth) =('push-prefs' action))
     ?.  allowed
-      :_(this (err-cards eyre-id 403 'not authenticated'))
-    =/  bod  (need (bind body.request.inbound-request |=(o=octs q.o)))
+      :_(this (err-payload-cards:ds eyre-id 403 'not authenticated'))
+    ?~  body.request.inbound-request
+      :_(this (err-payload-cards:ds eyre-id 400 'missing body'))
+    =/  bod  q.u.body.request.inbound-request
     =/  jon=(unit json)  (de:json:html bod)
-    ?~  jon  :_(this (err-cards eyre-id 400 'invalid json'))
-    ?.  ?=(%o -.u.jon)  :_(this (err-cards eyre-id 400 'expected object'))
+    ?~  jon  :_(this (err-payload-cards:ds eyre-id 400 'invalid json'))
+    ?.  ?=(%o -.u.jon)  :_(this (err-payload-cards:ds eyre-id 400 'expected object'))
     =/  tags-j  (~(get by p.u.jon) 'tags')
-    ?~  tags-j  :_(this (err-cards eyre-id 400 'missing tags'))
-    ?.  ?=(%a -.u.tags-j)  :_(this (err-cards eyre-id 400 'tags must be array'))
+    ?~  tags-j  :_(this (err-payload-cards:ds eyre-id 400 'missing tags'))
+    ?.  ?=(%a -.u.tags-j)  :_(this (err-payload-cards:ds eyre-id 400 'tags must be array'))
     =/  tags=(set term)
       %-  ~(gas in *(set term))
       %+  murn  p.u.tags-j
       |=(j=json ?.(?=(%s -.j) ~ `p.j))
-    ::  set tags on all subscriptions for this user
     =/  ps=pusher-state:push
       .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
     =/  inner=(map @ta tagged-sub:push)  (~(gut by subs.ps) who ~)
@@ -341,17 +270,47 @@
       =/  pt=push-set-tags:push  [who id tags]
       [%pass /push/tags %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
     :_  this
-    (welp tag-cards (ok-cards eyre-id))
+    (welp tag-cards (json-payload-cards:ds eyre-id o+(malt ~[['ok' b+&]])))
   ::
-  :_  this
-  (give-simple-payload:app:server eyre-id not-found:gen:server)
+  :_(this (not-found-cards:ds eyre-id))
   ::
-  ++  ok-cards
-    |=  eyre-id=@ta
-    ^-  (list card)
-    %+  give-simple-payload:app:server  eyre-id
-    %-  json-response:gen:server
-    o+(malt ~[['ok' b+&]])
+  ++  process-send
+    |=  [who=@p text=@t]
+    ^-  (quip card _this)
+    =/  parts=(list segment:notifchat)  (parse-segments text)
+    =/  msg=message:notifchat  [who text now.bowl parts]
+    =.  msgs.state
+      (scag max-msgs `(list message:notifchat)`[msg msgs.state])
+    =/  who-t  (trip (scot %p who))
+    =/  full  ;:(welp who-t ": " (trip text))
+    =/  title=@t
+      ?:  (lte (lent full) 80)  (crip full)
+      (crip (weld (scag 77 full) "..."))
+    =/  push-msg=push-message:push
+      [title '' ~ `'/apps/notifchat' `'message']
+    =/  mentioned=(set @p)
+      %-  ~(gas in *(set @p))
+      %+  murn  parts
+      |=  s=segment:notifchat
+      ?:(?=(%mention -.s) `+.s ~)
+    =/  excl=(set @p)
+      (~(uni in (sy who ~)) mentioned)
+    =/  broadcast=push-send:push
+      [~ (sy %message ~) excl push-msg]
+    =/  mention-targets=(set @p)
+      (~(del in mentioned) who)
+    =/  mention-cards=(list card)
+      ?:  =(~ mention-targets)  ~
+      =/  ms=push-send:push  [mention-targets ~ ~ push-msg]
+      ~[[%pass /mention %agent [our dap]:bowl %poke %push-send !>(ms)]]
+    =/  frags
+      ~[["outer" ~ (messages-manx msgs.state)]]
+    :_  this
+    ;:  welp
+      ~[[%pass /notify %agent [our dap]:bowl %poke %push-send !>(broadcast)]]
+      mention-cards
+      (push-sse-all:ds sessions ~ frags)
+    ==
   ::
   ++  icon-response
     ^-  simple-payload:http
@@ -368,7 +327,6 @@
       {"name":"Notifchat","short_name":"Notifchat","start_url":"/apps/notifchat","display":"standalone","background_color":"#ffffff","theme_color":"#333333","icons":[{"src":"/apps/notifchat/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
       '''
     [[200 [['content-type' 'application/manifest+json'] ~]] `(as-octs:mimes:html bod)]
-  ::
   ::
   ++  messages-manx
     |=  msgs=(list message:notifchat)
@@ -407,39 +365,38 @@
     ?:  (lth n 10)  (welp "0" (a-co:co n))
     (a-co:co n)
   ::
-  ++  page-html
+  ++  page-manx
     |=  who=@p
-    ^-  octs
-    =/  hr  ~(. href:datastar /apps/notifchat ~)
-    %-  as-octt:mimes:html
-    %+  welp  "<!DOCTYPE html>"
-    %-  en-xml:html
+    ^-  manx
+    =/  hr  ~(. href:ds /apps/notifchat ~)
     ;html
       ;head
         ;meta(charset "utf-8");
         ;meta(name "viewport", content "width=device-width, initial-scale=1");
         ;title: Notifchat
-        ;+  ;style:(-(trip page-css))
+        ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
         ;link(rel "manifest", href "/apps/notifchat/manifest.json");
         ;script(type "module", src "/apps/notifchat/datastar.js");
+        ;script(type "module", src "/apps/notifchat/pwa-gate.js");
       ==
       ;body
-        ;div#app
-          =data-signals-text  ""
-          =data-init          "{(data-get:hr / [["action" "sse"]]~)}"
-          =style              "display:flex;flex-direction:column;height:100vh;height:100dvh"
-          ;+  (header-manx who)
-          ;div#messages: loading...
-          ;form
-            =data-signals  "\{'_sending': false}"
-            =data-on_submit  (data-post:hr / [["action" "send"]]~)
-            =data-indicator  "_sending"
-            ;input#input(placeholder "message", autocomplete "off", data-bind_text "", data-attr_disabled "$_sending", data-effect "if(!$_sending) refocusInput()");
-            ;button(type "submit", data-attr_disabled "$_sending"): send
+        ;pwa-gate(name "Notifchat")
+          ;div#app
+            =data-signals-text  ""
+            =data-on-load       "{(data-get:hr / [["action" "sse"]]~)}"
+            =style              "display:flex;flex-direction:column;height:100vh;height:100dvh"
+            ;+  (header-manx who)
+            ;div#messages: loading...
+            ;form
+              =data-signals  "\{'_sending': false}"
+              =data-on-submit  (data-post:hr / [["action" "send"]]~)
+              =data-indicator  "_sending"
+              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-attr-disabled "$_sending", data-effect "if(!$_sending) refocusInput()");
+              ;button(type "submit", data-attr-disabled "$_sending"): send
+            ==
           ==
         ==
-        ;+  install-div
-        ;script:(-(trip page-js))
+        ;script(type "module", src "/apps/notifchat/notifchat.js");
       ==
     ==
   ::
@@ -464,7 +421,8 @@
         ;span: {(trip (scot %p who))}
       ==
       ;div.header-right
-        ;select#notif-mode.off(onchange "setNotifMode(this.value)")
+        ;select#notif-mode.off
+          =data-on-change  "setNotifMode(el.value)"
           ;option(value "off"): notifs off
           ;option(value "all"): all messages
           ;option(value "mention"): mentions only
@@ -472,256 +430,6 @@
         ;+  auth-el
       ==
     ==
-  ::
-  ++  install-div
-    ^-  manx
-    ;div#install(style "display:none")
-      ;h2: Install Notifchat
-      ;p: To use this app, install it.
-      ;p#install-instructions;
-      ;button#install-btn(style "display:none", onclick "doInstall()"): Install App
-    ==
-  ::
-  ++  page-css
-    ^-  @t
-    '''
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; color: #333; background: #fff;
-      display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-    header { display: flex; justify-content: space-between; align-items: center;
-      padding: 0.5rem 0.75rem; border-bottom: 1px solid #ddd; gap: 0.5rem; }
-    .header-left { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
-    .header-left h1 { font-size: 1rem; white-space: nowrap; }
-    .header-left span { font-size: 0.8rem; color: #999; overflow: hidden;
-      text-overflow: ellipsis; white-space: nowrap; }
-    .header-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
-    #notif-mode { font-size: 0.8rem; padding: 0.3rem 0.4rem; border-radius: 6px;
-      border: 1.5px solid #999; color: #999; background: transparent;
-      font-family: inherit; cursor: pointer; }
-    #notif-mode.off { border-color: #b08a1a; color: #b08a1a; }
-    .logout-btn { font-size: 0.8rem; color: #999; background: none; border: none;
-      cursor: pointer; padding: 0.35rem 0.5rem; border-radius: 6px; font-family: inherit; }
-    .logout-btn:active { background: rgba(0,0,0,0.06); }
-    #messages { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; }
-    .msg { margin-bottom: 0.5rem; }
-    .msg .author { font-weight: 600; font-size: 0.85rem; margin-right: 0.5rem; }
-    .msg .text { font-size: 0.9rem; }
-    .mention { font-weight: 600; color: #2563eb; }
-    .msg .time { font-size: 0.75rem; color: #999; }
-    form { display: flex; gap: 0.5rem; padding: 0.75rem 1rem;
-      border-top: 1px solid #ddd; }
-    form input { flex: 1; padding: 0.5rem; border: 1px solid #ddd;
-      border-radius: 4px; font-size: 0.9rem; }
-    form button { padding: 0.5rem 1rem; border: 1px solid #ddd;
-      border-radius: 4px; background: #333; color: #fff; cursor: pointer;
-      font-size: 0.9rem; }
-    #install { display: flex; flex-direction: column; align-items: center;
-      justify-content: center; flex: 1; padding: 2rem; text-align: center; }
-    #install h2 { margin-bottom: 1rem; }
-    #install p { margin-bottom: 0.5rem; color: #666; font-size: 0.9rem; }
-    #install button { margin-top: 1rem; padding: 0.75rem 1.5rem; border: 1px solid #ddd;
-      border-radius: 4px; background: #333; color: #fff; cursor: pointer; font-size: 0.9rem; }
-    @media (prefers-color-scheme: dark) {
-      body { background: #1a1a1a; color: #e0e0e0; }
-      header { border-bottom-color: #444; }
-      .header-left span { color: #777; }
-      #notif-mode { border-color: #777; color: #777; }
-      #notif-mode.off { border-color: #d4a820; color: #d4a820; }
-      .logout-btn:active { background: rgba(255,255,255,0.1); }
-      .logout-btn { color: #777; }
-      form { border-top-color: #444; }
-      form input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
-      form button { background: #e0e0e0; color: #1a1a1a; border-color: #444; }
-      .msg .time { color: #777; }
-      .mention { color: #60a5fa; }
-      #install p { color: #999; }
-      #install button { background: #e0e0e0; color: #1a1a1a; border-color: #444; }
-    }
-    '''
-  ::
-  ++  page-js
-    ^-  @t
-    '''
-    var deferredPrompt = null;
-    function urlB64ToUint8(b64) {
-      var pad = "=".repeat((4 - b64.length % 4) % 4);
-      var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
-      var arr = new Uint8Array(raw.length);
-      for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-      return arr;
-    }
-    function bufToB64Url(buf) {
-      var bytes = new Uint8Array(buf);
-      var s = "";
-      for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-      return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    }
-    window.addEventListener("beforeinstallprompt", function(e) {
-      e.preventDefault();
-      deferredPrompt = e;
-      var btn = document.getElementById("install-btn");
-      if (btn) btn.style.display = "";
-    });
-    function doInstall() {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
-    }
-    function checkStandalone() {
-      return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-    }
-    function startApp() {
-      document.getElementById("install").style.display = "none";
-      document.getElementById("app").style.display = "flex";
-      initNotifState();
-    }
-    function init() {
-      var install = document.getElementById("install");
-      document.body.appendChild(install);
-      if (checkStandalone()) {
-        startApp();
-        return;
-      }
-      document.getElementById("app").style.display = "none";
-      install.style.display = "flex";
-      var inst = document.getElementById("install-instructions");
-      if (/iPhone|iPad/.test(navigator.userAgent)) {
-        inst.textContent = "Tap the Share button, then 'Add to Home Screen'.";
-      } else if (/Android/.test(navigator.userAgent)) {
-        inst.textContent = "Tap the menu button, then 'Add to Home Screen' or 'Install App'.";
-      } else {
-        inst.textContent = "In Chrome, click the install icon in the address bar or use Menu > Install.";
-      }
-      setInterval(function() {
-        if (checkStandalone()) startApp();
-      }, 100);
-    }
-    function refocusInput() {
-      requestAnimationFrame(function() {
-        var el = document.getElementById("input");
-        if (el) el.focus();
-      });
-    }
-    function scrollMessages() {
-      var el = document.getElementById("messages");
-      if (el) el.scrollTop = el.scrollHeight;
-    }
-    new MutationObserver(scrollMessages).observe(
-      document.getElementById("app"),
-      {childList: true, subtree: true});
-    scrollMessages();
-    async function initNotifState() {
-      var sel = document.getElementById("notif-mode");
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        sel.disabled = true;
-        updateNotifStyle();
-        return;
-      }
-      try {
-        var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
-        var sub = await reg.pushManager.getSubscription();
-        if (!sub) { sel.value = "off"; return; }
-        var cr = await fetch("/apps/notifchat?action=push-check-sub", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({endpoint: sub.endpoint})
-        });
-        if (!cr.ok) {
-          await sub.unsubscribe();
-          localStorage.removeItem("push-sub-id");
-          sel.value = "off";
-          return;
-        }
-        var pr = await fetch("/apps/notifchat?action=push-prefs");
-        var prefs = await pr.json();
-        if (prefs.includes("mention")) sel.value = "mention";
-        else sel.value = "all";
-      } catch(e) { sel.value = "off"; }
-      finally { updateNotifStyle(); }
-    }
-    async function ensurePushSub() {
-      var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
-      if (!reg.active) {
-        await new Promise(function(resolve) {
-          var sw = reg.installing || reg.waiting;
-          sw.addEventListener("statechange", function() {
-            if (sw.state === "activated") resolve();
-          });
-        });
-      }
-      var sub = await reg.pushManager.getSubscription();
-      if (sub) return reg;
-      var resp = await fetch("/apps/notifchat/~web-pusher/vapid-key");
-      var vapidKey = await resp.text();
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8(vapidKey)
-      });
-      var p256dh = bufToB64Url(sub.getKey("p256dh"));
-      var auth = bufToB64Url(sub.getKey("auth"));
-      var id = "b-" + Date.now();
-      var r = await fetch("/apps/notifchat?action=push-subscribe", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({id: id, endpoint: sub.endpoint, p256dh: p256dh, auth: auth})
-      });
-      if (!r.ok) throw new Error("subscribe failed");
-      localStorage.setItem("push-sub-id", id);
-      return reg;
-    }
-    async function removePushSub() {
-      var reg = await navigator.serviceWorker.register("/apps/notifchat/~web-pusher/sw.js");
-      var sub = await reg.pushManager.getSubscription();
-      if (sub) await sub.unsubscribe();
-      var id = localStorage.getItem("push-sub-id");
-      if (id) {
-        await fetch("/apps/notifchat?action=push-unsubscribe", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({id: id})
-        });
-        localStorage.removeItem("push-sub-id");
-      }
-    }
-    async function setPrefs(tags) {
-      await fetch("/apps/notifchat?action=push-prefs", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({tags: tags})
-      });
-    }
-    function updateNotifStyle() {
-      var sel = document.getElementById("notif-mode");
-      sel.classList.toggle("off", sel.value === "off");
-    }
-    var _prevMode = "off";
-    async function setNotifMode(mode) {
-      var sel = document.getElementById("notif-mode");
-      try {
-        if (mode === "off") {
-          await removePushSub();
-          await setPrefs([]);
-        } else {
-          var reg = await ensurePushSub();
-          if (mode === "mention") await setPrefs(["mention"]);
-          else await setPrefs([]);
-          if (_prevMode === "off") reg.showNotification("notifications enabled");
-        }
-        _prevMode = mode;
-      } catch(e) {
-        sel.value = _prevMode;
-      }
-      updateNotifStyle();
-    }
-    init();
-    '''
-  ::
-  ++  err-cards
-    |=  [eyre-id=@ta code=@ud msg=@t]
-    ^-  (list card)
-    =/  bod=json  o+(malt ~[['error' s+msg]])
-    %+  give-simple-payload:app:server  eyre-id
-    [[code [['content-type' 'application/json'] ~]] `(json-to-octs:server bod)]
   --
 ::
 ++  on-watch
@@ -736,7 +444,7 @@
   ^-  (quip card _this)
   ?.  ?=([%http-response @ ~] pax)  `this
   =/  eid=@ta  i.t.pax
-  `this(requests (~(del in requests) eid))
+  `this(sessions (~(del in sessions) eid))
 ::
 ++  on-peek   on-peek:def
 ++  on-agent  on-agent:def

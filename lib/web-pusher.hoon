@@ -574,8 +574,7 @@
         padding: 0.2em 1em 0.2em 0;
       }
       td {
-        overflow-wrap: anywhere;
-        word-break: break-all;
+        white-space: nowrap;
       }
       .pending { color: #a80; }
       .sent { color: #080; }

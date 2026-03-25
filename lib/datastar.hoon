@@ -341,4 +341,87 @@
   %-  fall  :_  ~
   %-  mole  |.
   (malt (rash +:(need body) yquy:de-purl:html))
+::
+::  HTTP response helpers (web server core)
+::
+::  +payload-cards: send a simple-payload as HTTP response cards
+::
+++  payload-cards
+  |=  [rid=@ta pl=simple-payload:http]
+  ^-  (list card:agent:gall)
+  :~  [%give %fact ~[/http-response/[rid]] [%http-response-header !>(-.pl)]]
+      [%give %fact ~[/http-response/[rid]] [%http-response-data !>(+.pl)]]
+      [%give %kick ~[/http-response/[rid]] ~]
+  ==
+::
+::  +resource-payload: build a static resource response with optional caching
+::
+++  resource-payload
+  |=  [cached=(unit @dr) content-type=@t raw-file=@]
+  ^-  simple-payload:http
+  :-  :-  200
+      :-  ['Content-Type' content-type]
+      ?~  cached  ~
+      =/  seconds=@ud  (div u.cached ~s1)
+      :~  ['Cache-Control' (crip "public, max-age={(a-co:co seconds)}")]
+      ==
+  `(as-octs:mimes:html raw-file)
+::
+::  +resource-payload-cards: serve a static resource
+::
+++  resource-payload-cards
+  |=  [rid=@ta cached=(unit @dr) content-type=@t raw-file=@]
+  ^-  (list card:agent:gall)
+  (payload-cards rid (resource-payload cached content-type raw-file))
+::
+::  +html-payload-cards: serve a manx as an HTML page
+::
+++  html-payload-cards
+  |=  [rid=@ta hymn=manx]
+  ^-  (list card:agent:gall)
+  %+  payload-cards  rid
+  %^  resource-payload  ~  'text/html'
+  %-  crip
+  :-  '<!DOCTYPE html>'
+  (en-xml:html hymn)
+::
+::  +json-payload-cards: serve a json value
+::
+++  json-payload-cards
+  |=  [rid=@ta jon=json]
+  ^-  (list card:agent:gall)
+  %+  payload-cards  rid
+  :-  [200 [['content-type' 'application/json'] ~]]
+  `(as-octs:mimes:html (en:json:html jon))
+::
+::  +err-payload-cards: serve a JSON error response
+::
+++  err-payload-cards
+  |=  [rid=@ta code=@ud msg=@t]
+  ^-  (list card:agent:gall)
+  %+  payload-cards  rid
+  :-  [code [['content-type' 'application/json'] ~]]
+  `(as-octs:mimes:html (en:json:html o+(malt ~[['error' s+msg]])))
+::
+::  +not-found-cards: 404 response
+::
+++  not-found-cards
+  |=  rid=@ta
+  ^-  (list card:agent:gall)
+  (payload-cards rid [[404 ~] ~])
+::
+::  Manx helpers
+::
+::  +add-attribute: prepend an attribute to a manx
+::
+++  add-attribute
+  |=  [[=term =tape] =manx]
+  manx(a.g [[term tape] a.g.manx])
+::
+::  +add-attribute-if: conditionally prepend an attribute
+::
+++  add-attribute-if
+  |=  [=flag [=term =tape] =manx]
+  ?.  flag  manx
+  manx(a.g [[term tape] a.g.manx])
 --
