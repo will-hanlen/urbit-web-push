@@ -383,8 +383,8 @@ header {
 }
 
 .msg {
-  margin-bottom: 0.5rem;
-  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  margin-top: 1rem;
 }
 
 .msg-header {
@@ -414,8 +414,11 @@ header {
 }
 
 .mention {
-  font-weight: 600;
   color: var(--highlight);
+}
+
+.mention.self {
+  font-weight: 600;
 }
 
 .comet {
@@ -424,7 +427,6 @@ header {
 
 .mention.comet {
   color: var(--text-faint);
-  font-weight: 500;
 }
 
 .msg .time {

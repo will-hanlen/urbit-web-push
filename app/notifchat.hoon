@@ -370,7 +370,9 @@
     ?-  -.s
       %text     ;span: {(trip +.s)}
       %mention
-        =/  cls=tape  ?:(=(%pawn (clan:title +.s)) "mention comet" "mention")
+        =/  cls=tape
+          ?:  =(+.s our.bowl)  "mention self"
+          ?:(=(%pawn (clan:title +.s)) "mention comet" "mention")
         ;span(class cls): {(cite:title +.s)}
     ==
   ::
