@@ -16,12 +16,8 @@
 ++  max-msg-size  1.024      ::  max message bytes
 +$  versioned-state
   $%  [%0 state-0]
-      [%1 state-1]
   ==
 +$  state-0
-  $:  msgs=(list [author=@p text=@t sent-at=@da])
-  ==
-+$  state-1
   $:  msgs=(list message:notifchat)
   ==
 ++  parse-segments
@@ -52,7 +48,7 @@
   $(tok (snoc tok i.chars), chars t.chars)
 --
 ::
-=|  state-1
+=|  state-0
 =*  state  -
 =|  sessions=(set @ta)
 ::
@@ -69,21 +65,15 @@
     ds    datastar
 ::
 ++  on-init   `this
-++  on-save   !>(`versioned-state`[%1 state])
+++  on-save   !>(`versioned-state`[%0 state])
 ++  on-load
   |=  =vase
   ^-  (quip card _this)
-  ?:  ?=([%1 *] q.vase)
-    =/  old  !<(versioned-state vase)
-    ?>  ?=(%1 -.old)
-    `this(state +.old)
-  ::  legacy: untagged state-0
-  =/  old  !<(state-0 vase)
-  =/  new-msgs=(list message:notifchat)
-    %+  turn  msgs.old
-    |=  [author=@p text=@t sent-at=@da]
-    [author text sent-at (parse-segments text)]
-  `this(msgs.state new-msgs)
+  =/  old  (mule |.(!<(versioned-state vase)))
+  ?:  ?=(%& -.old)
+    ?>  ?=(%0 -.p.old)
+    `this(state +.p.old)
+  `this
 ::
 ++  on-poke
   |=  [=mark =vase]
@@ -391,7 +381,7 @@
               =data-signals  "\{'_sending': false}"
               =data-on-submit  (data-post:hr / [["action" "send"]]~)
               =data-indicator  "_sending"
-              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-attr-disabled "$_sending", data-effect "if(!$_sending) refocusInput()");
+              ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-class-sending "$_sending");
               ;button(type "submit", data-attr-disabled "$_sending"): send
             ==
           ==

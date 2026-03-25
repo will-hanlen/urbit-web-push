@@ -126,6 +126,11 @@ form input {
   font-size: 0.9rem;
 }
 
+form input.sending {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 form button {
   padding: 0.5rem 1rem;
   border: 1px solid #ddd;
