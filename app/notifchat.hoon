@@ -120,6 +120,8 @@
   ::  authenticated routes (moons and above)
   ::
   ?:  =(%pawn (clan:title src.bowl))
+    ?:  =('GET' meth)
+      :_(this (html-payload-cards:ds eyre-id login-page-manx))
     :_(this (err-payload-cards:ds eyre-id 403 'forbidden'))
   ::  main page
   ::
@@ -463,6 +465,31 @@
       ==
     ==
   ::
+  ++  login-page-manx
+    ^-  manx
+    ;html
+      ;head
+        ;*  head-marl
+      ==
+      ;body
+        ;pwa-gate(name "Notifchat")
+          ;div.login-page
+            ;div.login-card
+              ;p.login-prompt: login with your planet
+              ;form.login-form(method "POST", action "/~/login", autocomplete "off", onsubmit "this.querySelector('.login-submit').classList.add('loading')")
+                ;input(type "hidden", name "redirect", value "/apps/notifchat");
+                ;input(type "hidden", name "eauth", value "");
+                ;input.login-name(type "text", name "name", placeholder "~sampel-palnet", autocomplete "off", autofocus "", data-1p-ignore "", data-lpignore "true", data-form-type "other");
+                ;button.login-submit(type "submit")
+                  ;span.login-label: login
+                  ;span.login-spinner;
+                ==
+              ==
+            ==
+          ==
+        ==
+      ==
+    ==
   ::
   ++  header-manx
     |=  who=@p
