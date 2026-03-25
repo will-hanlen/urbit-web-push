@@ -83,6 +83,12 @@
   ?:  ?=(%push-test mark)
     ?>  =(our src):bowl
     (process-send our.bowl !<(@t vase))
+  ?:  ?=(%notifchat-wipe mark)
+    ?>  =(our src):bowl
+    =.  msgs.state  ~
+    =/  frags  ~[["outer" ~ (messages-manx msgs.state)]]
+    :_  this
+    (push-sse-all:ds sessions ~ frags)
   ?.  ?=(%handle-http-request mark)
     (on-poke:def mark vase)
   =+  !<([eyre-id=@ta =inbound-request:eyre] vase)
@@ -104,6 +110,12 @@
     :_(this (resource-payload-cards:ds eyre-id `~d7 'application/javascript' notifchat-js))
   ?:  &(=('GET' meth) =(/apps/notifchat/'notifchat.css' site))
     :_(this (resource-payload-cards:ds eyre-id `~d7 'text/css' notifchat-css))
+  ::  authenticated routes (moons and above)
+  ::
+  ?:  =(%pawn (clan:title src.bowl))
+    ?:  =('GET' meth)
+      :_(this (html-payload-cards:ds eyre-id login-page-manx))
+    :_(this (err-payload-cards:ds eyre-id 403 'forbidden'))
   ::  main page
   ::
   ?:  &(=('GET' meth) =(site /apps/notifchat) =('' action))
@@ -307,7 +319,7 @@
     |=  msgs=(list message:notifchat)
     ^-  manx
     ;div#messages
-      ;*  %+  turn  (flop msgs)
+      ;*  %+  turn  (flop (scag 100 msgs))
           |=  m=message:notifchat
           ;div.msg
             ;span.author
@@ -386,17 +398,35 @@
       ==
     ==
   ::
+  ++  login-page-manx
+    ^-  manx
+    ;html
+      ;head
+        ;meta(charset "utf-8");
+        ;meta(name "viewport", content "width=device-width, initial-scale=1");
+        ;title: Notifchat
+        ;link(rel "icon", href "/apps/notifchat/icon.svg", type "image/svg+xml");
+        ;link(rel "stylesheet", href "/apps/notifchat/notifchat.css");
+      ==
+      ;body
+        ;div.login-page
+          ;div.login-card
+            ;p.login-prompt: login with your planet
+            ;form.login-form(method "POST", action "/~/login")
+              ;input(type "hidden", name "redirect", value "/apps/notifchat");
+              ;input(type "hidden", name "eauth", value "");
+              ;input.login-name(type "text", name "name", placeholder "~sampel-palnet", autocomplete "off", autofocus "");
+              ;button.login-submit(type "submit"): login
+            ==
+          ==
+        ==
+      ==
+    ==
+  ::
   ++  header-manx
     |=  who=@p
     ^-  manx
     =/  login-el=manx
-      ?:  =(%pawn (clan:title who))
-        ;form.user-menu-form(method "POST", action "/~/login")
-          ;input(type "hidden", name "redirect", value "/apps/notifchat");
-          ;input(type "hidden", name "eauth", value "");
-          ;input(type "text", name "name", placeholder "~sampel", class "login-input");
-          ;button(type "submit", class "menu-action login-btn"): login
-        ==
       ;form.user-menu-form(method "GET", action "/~/logout")
         ;input(type "hidden", name "redirect", value "/apps/notifchat");
         ;button(type "submit", class "menu-action"): logout
@@ -435,7 +465,7 @@
       ;div.header-right
         ;div.user-menu
           ;button
-            =class  ?:(=(%pawn (clan:title who)) "user-btn comet" "user-btn")
+            =class  "user-btn"
             =data-on-click  "$_menuOpen = !$_menuOpen"
             =data-class-open  "$_menuOpen"
             ; {(cite:title who)}
