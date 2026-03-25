@@ -367,6 +367,10 @@
             =data-signals  "\{'text': '', '_menuOpen': false}"
             =data-on-load       "{(data-get:hr / [["action" "sse"]]~)}"
             ;+  (header-manx who)
+            ;div#error-banner
+              ;span.error-msg;
+              ;button.error-dismiss(data-on-click "el.parentElement.classList.remove('visible')"): ✕
+            ==
             ;div#messages: loading...
             ;form
               =data-signals  "\{'_sending': false}"
@@ -400,7 +404,7 @@
       ;div.header-left
         ;div.notif-menu
           =data-signals  "\{'_notifOpen': false}"
-          ;button#notif-mode.off
+          ;button#notif-mode.off.init
             =data-on-click  "if(!el.classList.contains('loading')) $_notifOpen = !$_notifOpen"
             =data-class-open  "$_notifOpen"
             ; turn on notifs

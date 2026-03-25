@@ -21,6 +21,9 @@
   --warn-border: #8aaa6a;
   --warn-text: #6a8a4a;
   --shadow: rgba(60, 100, 100, 0.1);
+  --error-bg: rgba(180, 60, 60, 0.12);
+  --error-border: rgba(180, 60, 60, 0.3);
+  --error-text: #a04040;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,6 +50,9 @@
     --warn-border: #7a9a5a;
     --warn-text: #9aba7a;
     --shadow: rgba(0, 0, 0, 0.3);
+    --error-bg: rgba(200, 70, 70, 0.2);
+    --error-border: rgba(200, 70, 70, 0.4);
+    --error-text: #d07070;
   }
 }
 
@@ -73,8 +79,7 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  position: fixed;
-  width: 100%;
+  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -303,6 +308,48 @@ header {
 
 .login-btn:hover {
   background: var(--accent-hover);
+}
+
+#error-banner {
+  display: none;
+  padding: 0.5rem 0.75rem;
+  padding-left: calc(0.75rem + env(safe-area-inset-left, 0px));
+  padding-right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  background: var(--error-bg);
+  border-bottom: 1px solid var(--error-border);
+  color: var(--error-text);
+  font-size: 0.85rem;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+#error-banner.visible {
+  display: flex;
+}
+
+#error-banner .error-msg {
+  flex: 1;
+}
+
+#error-banner .error-dismiss {
+  background: none;
+  border: none;
+  color: var(--error-text);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+  opacity: 0.7;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#error-banner .error-dismiss:hover {
+  opacity: 1;
+}
+
+#notif-mode.init {
+  visibility: hidden;
 }
 
 #messages {

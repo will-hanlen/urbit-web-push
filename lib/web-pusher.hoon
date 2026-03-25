@@ -71,32 +71,17 @@
   self.addEventListener("push", function(event) {
     var data = {title: "Notification", body: ""};
     try { data = event.data.json(); } catch(e) {}
-    var tag = data.tag || "";
     event.waitUntil(
-      (tag ? self.registration.getNotifications({tag: tag}) : Promise.resolve([]))
-      .then(function(all) {
-        var count = 1;
-        if (all.length > 0 && all[0].data && all[0].data.count) {
-          count = all[0].data.count + 1;
-        }
-        var title = data.title;
-        var body = data.body || "";
-        if (count > 1) {
-          body = count + " new";
-        }
-        return self.registration.showNotification(title, {
-          body: body,
-          icon: data.icon || "",
-          tag: tag,
-          renotify: true,
-          data: {url: data.url || "", count: count}
-        });
+      self.registration.showNotification(data.title, {
+        body: data.body || "",
+        icon: data.icon || "",
+        data: {url: data.url || ""}
       })
     );
   });
   self.addEventListener("notificationclick", function(event) {
     event.notification.close();
-    var url = event.notification.data && event.notification.data.url;
+    var url = (event.notification.data && event.notification.data.url) || "";
     if (!url) return;
     event.waitUntil(
       clients.matchAll({type: "window"}).then(function(list) {
