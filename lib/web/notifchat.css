@@ -60,7 +60,7 @@ header {
 }
 
 #notif-mode {
-  font-size: 0.8rem;
+  font-size: 16px;
   padding: 0.3rem 0.4rem;
   border-radius: 6px;
   border: 1.5px solid #999;
@@ -68,6 +68,7 @@ header {
   background: transparent;
   font-family: inherit;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #notif-mode.off {
@@ -76,14 +77,15 @@ header {
 }
 
 .logout-btn {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: #999;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.35rem 0.5rem;
+  padding: 0.4rem 0.5rem;
   border-radius: 6px;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .logout-btn:active {
@@ -215,5 +217,20 @@ form button {
 
   .mention {
     color: #60a5fa;
+  }
+}
+
+@media (max-width: 400px) {
+  header {
+    flex-wrap: wrap;
+  }
+
+  .header-right {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .header-left span {
+    max-width: 6rem;
   }
 }

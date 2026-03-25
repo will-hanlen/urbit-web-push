@@ -403,7 +403,7 @@
         ;form(method "POST", action "/~/login", style "margin:0;padding:0;border:none;display:flex;gap:0.25rem")
           ;input(type "hidden", name "redirect", value "/apps/notifchat");
           ;input(type "hidden", name "eauth", value "");
-          ;input(type "text", name "name", placeholder "~sampel", style "width:6rem;padding:0.3rem 0.4rem;font-size:0.8rem;border:1px solid #999;border-radius:6px;background:transparent;color:inherit;font-family:inherit");
+          ;input(type "text", name "name", placeholder "~sampel", style "width:6rem;padding:0.3rem 0.4rem;font-size:16px;border:1px solid #999;border-radius:6px;background:transparent;color:inherit;font-family:inherit");
           ;button(type "submit", class "logout-btn"): login
         ==
       ;form(method "GET", action "/~/logout", style "margin:0;padding:0;border:none")
