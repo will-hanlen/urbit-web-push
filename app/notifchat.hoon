@@ -45,7 +45,11 @@
   ^-  (unit [@p tape])
   =|  tok=tape
   |-
-  ?:  |(?=(~ chars) =(' ' i.chars) =(',' i.chars) =('.' i.chars))
+  ?~  chars
+    =/  name  (slaw %p (crip (weld "~" tok)))
+    ?~  name  ~
+    `[u.name chars]
+  ?.  |(=(i.chars '-') &((gte i.chars 'a') (lte i.chars 'z')))
     =/  name  (slaw %p (crip (weld "~" tok)))
     ?~  name  ~
     `[u.name chars]
@@ -455,7 +459,7 @@
                   :_  :~  [%id "input"]
                           [%placeholder "reply..."]
                           [%autocomplete "off"]
-                          [%rows "2"]
+                          [%rows "4"]
                           [%data-bind-text ""]
                           [%data-class-sending "$_sending"]
                           [%data-on-effect "if(!$_sending) el.focus()"]

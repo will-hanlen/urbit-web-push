@@ -533,8 +533,22 @@ form .send-btn svg {
 }
 
 form .send-btn:disabled {
-  opacity: 0.5;
   cursor: default;
+}
+
+form .send-btn:disabled svg {
+  display: none;
+}
+
+form .send-btn:disabled::after {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: notif-spin 0.6s linear infinite;
 }
 
 :focus-visible {
