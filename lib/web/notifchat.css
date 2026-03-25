@@ -524,8 +524,6 @@ form button {
   background: var(--accent-hover);
 }
 
-@media (display-mode: standalone) {
-  form {
-    padding-bottom: 1.5rem;
-  }
+body.standalone form {
+  padding-bottom: 1.5rem;
 }
