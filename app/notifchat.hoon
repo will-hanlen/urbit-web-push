@@ -480,7 +480,7 @@
             =data-on-click  "if(!el.classList.contains('loading')) $_notifOpen = !$_notifOpen"
             =data-class-open  "$_notifOpen"
             ;+  bell-icon
-            ;span.notif-label: turn on notifs
+            ;span.notif-label: turn on notifications
           ==
           ;div#notif-dropdown.notif-dropdown
             =data-show  "$_notifOpen"
