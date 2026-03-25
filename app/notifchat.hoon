@@ -369,7 +369,7 @@
             ;+  (header-manx who)
             ;div#error-banner
               ;span.error-msg;
-              ;button.error-dismiss(data-on-click "el.parentElement.classList.remove('visible')"): ✕
+              ;button.error-dismiss(data-on-click "el.parentElement.classList.remove('visible')"): x
             ==
             ;div#messages: loading...
             ;form
