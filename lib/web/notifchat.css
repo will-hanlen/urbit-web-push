@@ -410,7 +410,7 @@ form {
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  padding-bottom: 0.75rem;
+  padding-bottom: 1.5rem;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--bg-raised);
@@ -524,6 +524,3 @@ form button {
   background: var(--accent-hover);
 }
 
-body.standalone form {
-  padding-bottom: 1.5rem;
-}
