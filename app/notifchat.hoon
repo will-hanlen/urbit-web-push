@@ -417,7 +417,16 @@
               =data-on-submit  (data-post:hr / [["action" "send"]]~)
               =data-indicator  "_sending"
               ;input#input(placeholder "message", autocomplete "off", data-bind-text "", data-class-sending "$_sending", data-on-effect "if(!$_sending) el.focus()");
-              ;button(type "submit", data-attr-disabled "$_sending"): send
+              ;button.send-btn(type "submit", data-attr-disabled "$_sending")
+                ;svg
+                  =xmlns  "http://www.w3.org/2000/svg"
+                  =viewBox  "0 0 20 20"
+                  =fill  "currentColor"
+                  =width  "20"
+                  =height  "20"
+                  ;path(fill-rule "evenodd", d "M3 10a.75.75 0 0 1 .75-.75h10.638l-3.96-3.71a.75.75 0 1 1 1.024-1.096l5.25 4.916a.75.75 0 0 1 0 1.096l-5.25 4.916a.75.75 0 1 1-1.024-1.096l3.96-3.71H3.75A.75.75 0 0 1 3 10Z", clip-rule "evenodd");
+                ==
+              ==
             ==
           ==
         ==
@@ -436,11 +445,14 @@
           ;div.login-page
             ;div.login-card
               ;p.login-prompt: login with your planet
-              ;form.login-form(method "POST", action "/~/login", autocomplete "off")
+              ;form.login-form(method "POST", action "/~/login", autocomplete "off", onsubmit "this.querySelector('.login-submit').classList.add('loading')")
                 ;input(type "hidden", name "redirect", value "/apps/notifchat");
                 ;input(type "hidden", name "eauth", value "");
                 ;input.login-name(type "text", name "name", placeholder "~sampel-palnet", autocomplete "off", autofocus "", data-1p-ignore "", data-lpignore "true", data-form-type "other");
-                ;button.login-submit(type "submit"): login
+                ;button.login-submit(type "submit")
+                  ;span.login-label: login
+                  ;span.login-spinner;
+                ==
               ==
             ==
           ==
