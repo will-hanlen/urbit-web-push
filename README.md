@@ -2,17 +2,6 @@
 
 Browser push notifications for Urbit, implemented entirely in Hoon. Ships with a demo chat app and a drop-in agent wrapper so any Gall agent can send push notifications using the W3C Web Push protocol (RFC 8291/8292).
 
-## What it does
-
-- **VAPID authentication** (RFC 8292) -- ES256 JWT signing with P-256 keys
-- **ECDH key agreement** -- P-256 Diffie-Hellman with browser subscription keys
-- **HKDF key derivation** (RFC 5869) -- SHA-256 extract and expand
-- **AES-128-GCM encryption** (RFC 8291) -- content encryption for push payloads
-- **Agent wrapper** -- drop-in library that adds push support to any Gall agent
-- **Tag-based filtering** -- target notifications by subscriber tags
-- **Delivery tracking** -- track pending/sent/failed/expired/gone status per notification
-- **Demo app** -- Notifchat, a minimal groupchat with push notifications
-
 ## Architecture
 
 ```
@@ -24,39 +13,12 @@ app/notifchat.hoon       -- Demo agent: chat UI with push notifications
             └─ lib/aes-gcm   -- AES-128-GCM encrypt/decrypt
 ```
 
-## Installation
-
-### From a distributor
-
-```
-|install ~zod %web-push
-```
-
-### Chrome / Brave
-
-Chrome and Brave on desktop don't support web push from self-signed HTTPS or bare HTTP. You have two options:
-
-1. **Serve your ship behind a reverse proxy with a valid TLS certificate** (e.g. via Caddy or nginx with Let's Encrypt).
-2. **Allow your ship's origin as an insecure origin** by navigating to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, adding your ship's URL, and restarting the browser.
-
-### iOS
-
-Push notifications on iOS require your app to be installed as a PWA (added to the home screen). The demo app includes a PWA install gate that guides users through this.
-
-## Usage
-
-### Using the demo app
-
-1. Navigate to `/apps/notifchat` on your ship
-2. Subscribe to push notifications when prompted
-3. Send messages -- all subscribers receive push notifications
-
 ### Adding push to your own agent
 
-Wrap your agent with `web-pusher` to get push support with zero crypto code:
+Wrap your agent with `web-pusher` to get push support:
 
 ```hoon
-/+  web-pusher, default-agent
+/+  web-pusher
 /-  push
 
 %-  %:  agent:web-pusher
@@ -76,7 +38,7 @@ The wrapper automatically:
 - Serves `{base}/~web-pusher/sw.js` default service worker (public)
 - Serves `{base}/~web-pusher/debug` showing config, subs, deliveries (owner only)
 - Passes all other HTTP through to the inner agent
-- Encrypts and delivers notifications via iris
+- Encrypts and delivers notifications
 - Auto-removes dead subscriptions on 410/404 responses
 
 #### Managing subscriptions
