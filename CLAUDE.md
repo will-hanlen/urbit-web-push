@@ -33,7 +33,7 @@ Use the `/dojo` skill (e.g., `/dojo -test /=web-push=/tests`).
 
 ```
 app/notifchat.hoon     -- Demo agent: chat UI, push subscription endpoints
-  └─ lib/web-pusher    -- Agent wrapper: VAPID keys, subscription store, delivery engine
+  └─ lib/web-pusher    -- Agent wrapper: VAPID keys, subscription store, notification sender
        └─ lib/web-push -- Core protocol: types, encryption, VAPID headers
             ├─ lib/jwt      -- ES256 JWT signing/verification (P-256/secp256r1)
             ├─ lib/hkdf     -- HKDF-SHA-256 extract+expand (RFC 5869)

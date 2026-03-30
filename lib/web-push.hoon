@@ -114,19 +114,9 @@
 +$  push-subscribe    [who=@p id=@ta sub=subscription tags=(set term)]
 +$  push-unsubscribe  [who=@p id=@ta]
 +$  push-set-tags     [who=@p id=@ta tags=(set term)]
-+$  delivery-status  ?(%pending %sent %failed %expired %gone)
-+$  send-key  [ship=@p sub-id=@ta notif-id=@ud]
-+$  delivery
-  $:  title=@t
-      sent-at=@da
-      =delivery-status
-  ==
 +$  pusher-state
   $:  config=(unit push-config)
       subs=(map @p (map @ta tagged-sub))
-      send-order=(list send-key)
-      sends=(map send-key delivery)
-      next-id=@ud
   ==
 ::
 ++  extract-origin

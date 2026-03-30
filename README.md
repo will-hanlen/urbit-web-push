@@ -2,6 +2,8 @@
 
 An agent wrapper which manages browser push notifications for gall agents.
 
+Modern browsers can display native notifications even when the page isn't open, via the [Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API). The protocol requires the server to encrypt each message with ECDH on P-256, derive keys with HKDF-SHA-256, encrypt with AES-128-GCM, and sign requests with VAPID JWTs. This end-to-end encryption means only your ship and the user's device can read the notification content — push services like Google's and Apple's only ever see ciphertext. This library implements the full protocol in pure Hoon.
+
 Ships with a demo chat app. (try it here: https://hawk.computer/apps/notifchat)
 
 ## Adding the wrapper to your own agent
@@ -20,23 +22,11 @@ Then wrap your agent with the `web-pusher` core:
 
 ```hoon
 /+  web-pusher
-%-  %:  agent:web-pusher
+%-  %+  agent:web-pusher
       ::
-      ::  eyre binding path
-      ::  NOTE: the agent wrapper handles the bind, so you no longer have to
-      ::        send [%pass /bind %arvo %e %connect ...]
-      ::        in your on-init
-      ::
-      /apps/my-app
-      ::
-      ::  VAPID contact.
-      ::
-      'mailto:you@example.com'
-      ::
-      ::  max delivery records (0 = no tracking)
-      ::
-      200
-    ==
+      /apps/my-app    :: eyre binding (handles passing [%pass ... %e %connect ...] in on-init)
+    'mailto:you@example.com'  :: VAPID contact
+  ::
 ^-  agent:gall
 |_  =bowl:gall
 ...
@@ -48,10 +38,77 @@ The wrapper automatically:
 - Generates and persists VAPID keys on first load
 - Serves `{base}/~web-pusher/vapid-key` for browsers (public)
 - Serves `{base}/~web-pusher/sw.js` default service worker (public)
-- Serves `{base}/~web-pusher/debug` showing config, subs, deliveries (owner only)
+- Serves `{base}/~web-pusher/debug` showing config and subs (owner only)
 - Passes all other HTTP through to the inner agent
 - Encrypts and delivers notifications
 - Auto-removes dead subscriptions on 410/404 responses
+
+### Frontend setup
+
+Push notifications require a PWA (Progressive Web App) context — especially on iOS. You need a manifest, a service worker, and JavaScript to subscribe the browser.
+
+**1. PWA manifest**
+
+Serve a `manifest.json` from your agent and link it in your HTML:
+
+```html
+<link rel="manifest" href="/apps/my-app/manifest.json">
+```
+
+At minimum it needs:
+
+```json
+{
+  "id": "/apps/my-app",
+  "name": "My App",
+  "short_name": "My App",
+  "start_url": "/apps/my-app",
+  "scope": "/apps/my-app",
+  "display": "standalone",
+  "icons": [{ "src": "/apps/my-app/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
+```
+
+**2. Service worker**
+
+The wrapper serves a default service worker at `{base}/~web-pusher/sw.js` that handles push events and notification clicks. Register it from your JavaScript:
+
+```javascript
+const reg = await navigator.serviceWorker.register('/apps/my-app/~web-pusher/sw.js');
+await navigator.serviceWorker.ready;
+```
+
+**3. Subscribe to push**
+
+Fetch the VAPID public key from the wrapper, subscribe via the browser's Push API, and send the subscription to your agent:
+
+```javascript
+// fetch VAPID key
+const vapidB64 = await fetch('/apps/my-app/~web-pusher/vapid-key').then(r => r.text());
+const vapidKey = Uint8Array.from(atob(vapidB64.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+
+// subscribe
+const sub = await reg.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: vapidKey
+});
+
+// send to your agent's endpoint
+const id = `b-${Date.now()}`;
+await fetch('/apps/my-app?action=push-subscribe', {
+  method: 'POST',
+  body: JSON.stringify({
+    id,
+    endpoint: sub.endpoint,
+    p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh'))))
+              .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),
+    auth:   btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))
+              .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+  })
+});
+```
+
+Your agent's HTTP handler parses this JSON, decodes the base64url keys to MSB-first atoms (`de-base64url:web-push` then `rev 3`), and self-pokes `%push-subscribe` to store the subscription in the wrapper.
 
 ## Usage
 
@@ -85,8 +142,6 @@ The wrapper exposes peeks under `/web-pusher`:
 
 - `/u/web-pusher` -- loob, always `%.y`
 - `/x/web-pusher/state` -- full `pusher-state` noun
-- `/x/web-pusher/sends/@p` -- deliveries for a ship
-- `/x/web-pusher/sends/@p/@ta` -- deliveries for a specific subscription
 
 ## License
 

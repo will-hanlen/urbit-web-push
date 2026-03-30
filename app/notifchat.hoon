@@ -68,7 +68,6 @@
 %-  %:  agent:web-pusher
     /apps/notifchat
     'mailto:you@example.com'
-    200
   ==
 ^-  agent:gall
 |_  =bowl:gall
