@@ -19,7 +19,6 @@ Wrap your agent with `web-pusher` to get push support:
 
 ```hoon
 /+  web-pusher
-/-  push
 
 %-  %:  agent:web-pusher
       /apps/my-app              ::  eyre binding path
@@ -56,7 +55,7 @@ Your inner agent handles browser-facing HTTP (parsing subscription JSON, authent
 [%pass /push/tags %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
 ```
 
-Where types are defined in `sur/push.hoon`:
+Where types are defined in `lib/web-push.hoon`:
 
 ```hoon
 +$  push-subscribe    [who=@p id=@ta sub=subscription tags=(set term)]
@@ -94,7 +93,7 @@ Where `ps` is a `push-send`:
 Example -- broadcast to everyone:
 
 ```hoon
-=/  ps=push-send:push
+=/  ps=push-send:web-push
   [~ ~ ~ 'Hello' 'From Urbit' ~ ~ ~]
 [%pass /push/send %agent [our dap]:bowl %poke %push-send !>(ps)]
 ```
@@ -114,17 +113,16 @@ If you need full control, use `lib/web-push` directly:
 
 ```hoon
 /+  web-push
-/-  push
 
 ::  generate VAPID keypair (do once, persist in state)
-=/  config=push-config:push
+=/  config=push-config:web-push
   (generate-vapid-keypair:web-push eny.bowl 'mailto:you@example.com')
 
 ::  send a notification (returns a request:http for iris)
 =/  req=request:http
   %:  send-notification:web-push
     config
-    subscription    ::  from browser (subscription:push)
+    subscription    ::  from browser (subscription:web-push)
     '{"title":"hi","body":"hello"}'  ::  JSON payload
     eny.bowl
   ==

@@ -9,11 +9,11 @@
 ::
 ::  To send push notifications from a Gall agent, you need:
 ::
-::    - A VAPID keypair (push-config:push), generated once and
+::    - A VAPID keypair (push-config), generated once and
 ::      persisted in agent state
 ::    - An HTTP endpoint that serves the VAPID public key so
 ::      browsers can subscribe
-::    - Browser subscriptions (subscription:push) collected from
+::    - Browser subscriptions (subscription) collected from
 ::      clients and stored in agent state
 ::
 ::  Step 1: Generate a VAPID keypair
@@ -22,7 +22,7 @@
 ::    sub field must be a mailto: or https: URL identifying the
 ::    application server, as required by RFC 8292.
 ::
-::      =/  config=push-config:push
+::      =/  config=push-config
 ::        (generate-vapid-keypair:web-push eny.bowl 'mailto:you@example.com')
 ::
 ::  Step 2: Serve the VAPID public key over HTTP
@@ -53,13 +53,13 @@
 ::    The PushSubscription object contains an endpoint URL, a
 ::    p256dh public key, and an auth secret.  POST these back
 ::    to the agent (e.g. as JSON) and store them as a
-::    subscription:push.  The p256dh and auth values arrive as
+::    subscription.  The p256dh and auth values arrive as
 ::    base64url and must be decoded to raw bytes (MSB-first @)
 ::    before storing:
 ::
 ::      =/  dh=@  (rev 3 p.dh-octs q.dh-octs)
 ::      =/  au=@  (rev 3 p.au-octs q.au-octs)
-::      =/  sub=subscription:push  [endpoint dh au]
+::      =/  sub=subscription  [endpoint dh au]
 ::
 ::  Step 4: Build and send a notification
 ::
@@ -90,10 +90,45 @@
 ::
 ::      [%pass /push/[sub-id] %arvo %i %request req *outbound-config:iris]
 ::
-/-  push
 /+  jwt, hkdf, aes-gcm
 =,  jwt
 |%
+::  types (formerly sur/push)
+::
++$  subscription  [endpoint=@t p256dh=@ auth=@]
++$  tagged-sub  [sub=subscription tags=(set term)]
++$  push-config  [private-key=@ public-key=@ sub=@t]
++$  push-message
+  $:  title=@t
+      body=@t
+      icon=(unit @t)
+      url=(unit @t)
+      tag=(unit @t)
+  ==
++$  push-send
+  $:  targets=(set @p)    ::  specific ships (empty = all subscribed)
+      tags=(set term)     ::  filter by sub tags (empty = no filtering)
+      exclude=(set @p)    ::  remove these ships from recipients
+      msg=push-message
+  ==
++$  push-subscribe    [who=@p id=@ta sub=subscription tags=(set term)]
++$  push-unsubscribe  [who=@p id=@ta]
++$  push-set-tags     [who=@p id=@ta tags=(set term)]
++$  delivery-status  ?(%pending %sent %failed %expired %gone)
++$  send-key  [ship=@p sub-id=@ta notif-id=@ud]
++$  delivery
+  $:  title=@t
+      sent-at=@da
+      =delivery-status
+  ==
++$  pusher-state
+  $:  config=(unit push-config)
+      subs=(map @p (map @ta tagged-sub))
+      send-order=(list send-key)
+      sends=(map send-key delivery)
+      next-id=@ud
+  ==
+::
 ++  extract-origin
   |=  url=@t
   ^-  @t
@@ -114,7 +149,7 @@
     (rap 3 ~[':' (crip (a-co:co u.q.p.ux))])
   (rap 3 ~[scheme '://' host port-text])
 ++  make-vapid-headers
-  |=  [endpoint=@t config=push-config:push exp=@ud]
+  |=  [endpoint=@t config=push-config exp=@ud]
   ^-  (list [key=@t value=@t])
   =/  origin=@t  (extract-origin endpoint)
   =/  jwt=@t
@@ -128,7 +163,7 @@
   ==
 ++  generate-vapid-keypair
   |=  [eny=@ sub=@t]
-  ^-  push-config:push
+  ^-  push-config
   =/  raw=@  (shay 32 (can 3 ~[[32 eny] [4 'vpid']]))
   =/  priv=@  (mod raw (dec n.t))
   =.  priv  ?:(=(0 priv) 1 priv)
@@ -201,7 +236,7 @@
   =/  body-len=@ud  (add 102 ct-len)  ::  86 header + ct + 16 tag
   [body-len body]
 ++  message-to-json
-  |=  msg=push-message:push
+  |=  msg=push-message
   ^-  octs
   =/  pairs=(list [@t json])
     :~  ['title' [%s title.msg]]
@@ -216,7 +251,7 @@
   =/  jon=json  [%o (~(gas by *(map @t json)) pairs)]
   (as-octs:mimes:html (en:json:html jon))
 ++  send-notification
-  |=  [sub=subscription:push config=push-config:push msg=octs exp=@ud eny=@]
+  |=  [sub=subscription config=push-config msg=octs exp=@ud eny=@]
   ^-  request:http
   =/  eph-priv=@
     %+  mod

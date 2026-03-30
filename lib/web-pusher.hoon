@@ -56,9 +56,8 @@
 ::    /x/web-pusher/sends/@p -- (list delivery) for ship
 ::    /x/web-pusher/sends/@p/@ta -- (list delivery) for sub
 ::
-/-  push
 /+  web-push, server
-=,  push
+=,  web-push
 =/  default-sw-js=octs
   %-  as-octs:mimes:html
   '''

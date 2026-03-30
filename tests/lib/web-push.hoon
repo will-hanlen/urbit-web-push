@@ -36,7 +36,6 @@
 ::       - ciphertext: AES-GCM encrypted payload with padding
 ::       - tag: AES-GCM authentication tag (16 bytes)
 ::
-/-  push
 /+  *test, web-push, hkdf, aes-gcm
 ::
 |%
@@ -121,7 +120,7 @@
 ::  --- Test: message fields are correctly serialized to JSON ---
 ::
 ++  test-message-to-json
-  =/  msg=push-message:push
+  =/  msg=push-message:web-push
     ['Test Title' 'Test Body' `'icon.png' `'https://example.com' `'tag1']
   =/  result  (message-to-json:web-push msg)
   ::  parse the JSON back to verify the fields
@@ -146,7 +145,7 @@
 ++  test-message-to-json-special-chars
   ::  build a title containing literal double-quote characters
   =/  title=@t  (rap 3 ~['He said ' '"' 'hello' '"'])
-  =/  msg=push-message:push
+  =/  msg=push-message:web-push
     [title 'body with backslash \\' ~ ~ ~]
   =/  result  (message-to-json:web-push msg)
   ::  must produce valid JSON (parseable) despite special characters

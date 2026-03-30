@@ -44,16 +44,6 @@ app/notifchat.hoon     -- Demo agent: chat UI, push subscription endpoints, busi
             └─ lib/aes-gcm  -- AES-128-GCM encrypt/decrypt (NIST SP 800-38D)
 ```
 
-### sur/push.hoon — Shared types
-
-- `subscription` — browser push endpoint + keys (p256dh, auth as MSB-first atoms)
-- `tagged-sub` — subscription with per-subscription `tags=(set term)` for filtering
-- `push-config` — VAPID keypair + mailto subject
-- `push-message` — notification payload (title, body, icon, url, tag)
-- `push-send` — delivery request: targets, tag filter, exclusions, message
-- `push-subscribe` / `push-unsubscribe` / `push-set-tags` — inner→outer poke types
-- `pusher-state` — wrapper state: config, subs (per-ship map of tagged-subs), delivery tracking
-
 ### lib/web-pusher.hoon — Agent wrapper (store + delivery engine)
 
 Wraps any gall agent via `%-  agent:web-pusher`. The wrapper is deliberately simple — it stores data and delivers notifications, but has no business logic about who may subscribe or what preferences are valid.
@@ -94,9 +84,9 @@ Example (notifchat): the `action=push-subscribe` endpoint parses the browser's P
 [%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
 ```
 
-### lib/web-push.hoon — Stateless crypto library
+### lib/web-push.hoon — Types and stateless crypto library
 
-`+send-notification` is the main entry point; `+encrypt-payload` handles the RFC 8291 encryption pipeline. Also provides `de-base64url` for key decoding.
+Defines all shared types (`subscription`, `tagged-sub`, `push-config`, `push-message`, `push-send`, `push-subscribe`, `push-unsubscribe`, `push-set-tags`, `pusher-state`, etc.). `+send-notification` is the main entry point; `+encrypt-payload` handles the RFC 8291 encryption pipeline. Also provides `de-base64url` for key decoding.
 
 ### lib/jwt.hoon — P-256 / ES256
 

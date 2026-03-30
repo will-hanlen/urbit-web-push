@@ -3,7 +3,7 @@
 ::  Wrapped by web-pusher for VAPID keys, browser
 ::  subscriptions, encryption, and delivery tracking.
 ::
-/-  notifchat, push
+/-  notifchat
 /+  web-pusher, web-push, default-agent, verb, datastar
 /*  datastar-js    %js   /lib/web/datastar/js
 /*  pwa-gate-js    %js   /lib/web/pwa-gate/js
@@ -178,9 +178,9 @@
     ?~  au-octs  :_(this (err-payload-cards:ds eyre-id 400 'invalid auth'))
     =/  dh=@  (rev 3 p.u.dh-octs q.u.dh-octs)
     =/  au=@  (rev 3 p.u.au-octs q.u.au-octs)
-    =/  sub=subscription:push  [u.ep dh au]
+    =/  sub=subscription:web-push  [u.ep dh au]
     =/  tags=(set term)  (parse-tags (~(get by form) 'tags'))
-    =/  ps=push-subscribe:push  [src.bowl `@ta`u.id sub tags]
+    =/  ps=push-subscribe:web-push  [src.bowl `@ta`u.id sub tags]
     :_  this
     :*  [%pass /push/sub %agent [our dap]:bowl %poke %push-subscribe !>(ps)]
         (give-empty:ds eyre-id)
@@ -191,7 +191,7 @@
     =/  form  (form-body:ds body.request.inbound-request)
     =/  id  (~(get by form) 'id')
     ?~  id  :_(this (err-payload-cards:ds eyre-id 400 'missing id'))
-    =/  ps=push-unsubscribe:push  [src.bowl `@ta`u.id]
+    =/  ps=push-unsubscribe:web-push  [src.bowl `@ta`u.id]
     :_  this
     :*  [%pass /push/unsub %agent [our dap]:bowl %poke %push-unsubscribe !>(ps)]
         (give-empty:ds eyre-id)
@@ -202,20 +202,20 @@
     =/  form  (form-body:ds body.request.inbound-request)
     =/  ep  (~(get by form) 'endpoint')
     ?~  ep  :_(this (err-payload-cards:ds eyre-id 400 'missing endpoint'))
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
+    =/  inner=(map @ta tagged-sub:web-push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  found=?
       %+  lien  ~(val by inner)
-      |=(ts=tagged-sub:push =(endpoint.sub.ts u.ep))
+      |=(ts=tagged-sub:web-push =(endpoint.sub.ts u.ep))
     :_  this
     ?:  found  (give-empty:ds eyre-id)
     (err-payload-cards:ds eyre-id 404 'subscription not found')
   ::  push-prefs GET: return tags for this user's subscriptions
   ::
   ?:  &(=('GET' meth) =('push-prefs' action))
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
+    =/  inner=(map @ta tagged-sub:web-push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  all-tags=(set term)
       %-  ~(rep by inner)
-      |=  [[id=@ta ts=tagged-sub:push] acc=(set term)]
+      |=  [[id=@ta ts=tagged-sub:web-push] acc=(set term)]
       (~(uni in acc) tags.ts)
     =/  arr=json  [%a (turn ~(tap in all-tags) |=(t=term [%s t]))]
     :_(this (json-payload-cards:ds eyre-id arr))
@@ -224,11 +224,11 @@
   ?:  &(=('POST' meth) =('push-prefs' action))
     =/  form  (form-body:ds body.request.inbound-request)
     =/  tags=(set term)  (parse-tags (~(get by form) 'tags'))
-    =/  inner=(map @ta tagged-sub:push)  (~(gut by subs:get-pstate) src.bowl ~)
+    =/  inner=(map @ta tagged-sub:web-push)  (~(gut by subs:get-pstate) src.bowl ~)
     =/  tag-cards=(list card)
       %+  turn  ~(tap by inner)
-      |=  [id=@ta ts=tagged-sub:push]
-      =/  pt=push-set-tags:push  [src.bowl id tags]
+      |=  [id=@ta ts=tagged-sub:web-push]
+      =/  pt=push-set-tags:web-push  [src.bowl id tags]
       [%pass /push/tags %agent [our dap]:bowl %poke %push-set-tags !>(pt)]
     :_  this
     (welp tag-cards (give-empty:ds eyre-id))
@@ -247,7 +247,7 @@
     =/  title=@t
       ?:  (lte (lent full) 80)  (crip full)
       (crip (weld (scag 77 full) "..."))
-    =/  push-msg=push-message:push
+    =/  push-msg=push-message:web-push
       [title '' `'/apps/notifchat/icon.svg' `'/apps/notifchat' `'message']
     =/  mentioned=(set @p)
       %-  ~(gas in *(set @p))
@@ -256,13 +256,13 @@
       ?:(?=(%mention -.s) `+.s ~)
     =/  excl=(set @p)
       (~(uni in (sy who ~)) mentioned)
-    =/  broadcast=push-send:push
+    =/  broadcast=push-send:web-push
       [~ (sy %message ~) excl push-msg]
     =/  mention-targets=(set @p)
       (~(del in mentioned) who)
     =/  mention-cards=(list card)
       ?:  =(~ mention-targets)  ~
-      =/  ms=push-send:push  [mention-targets ~ ~ push-msg]
+      =/  ms=push-send:web-push  [mention-targets ~ ~ push-msg]
       ~[[%pass /mention %agent [our dap]:bowl %poke %push-send !>(ms)]]
     =/  frags
       ~[["outer" ~ (messages-manx msgs.state)]]
@@ -274,8 +274,8 @@
     ==
   ::
   ++  get-pstate
-    ^-  pusher-state:push
-    .^(pusher-state:push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
+    ^-  pusher-state:web-push
+    .^(pusher-state:web-push %gx /(scot %p our.bowl)/[dap.bowl]/(scot %da now.bowl)/web-pusher/state/noun)
   ::
   ++  parse-tags
     |=  tags-t=(unit @t)
