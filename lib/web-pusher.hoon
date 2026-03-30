@@ -131,6 +131,8 @@
       ==
     ::  unrecognized state -- bunt and let inner agent reload
     ::
+    =.  config.pstate
+      (some (generate-vapid-keypair:web-push eny.bowl mailto))
     =^  cards  agent  (on-load:ag old-state)
     :_  this
     :*  [%pass /web-pusher/eyre %arvo %e %connect [~ base] dap.bowl]
