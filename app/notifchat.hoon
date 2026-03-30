@@ -337,6 +337,7 @@
         "name": "Notifchat",
         "short_name": "Notifchat",
         "start_url": "/apps/notifchat",
+        "scope": "/apps/notifchat",
         "display": "standalone",
         "background_color": "#1f2f2f",
         "theme_color": "#1f2f2f",
