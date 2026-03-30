@@ -32,6 +32,7 @@
 ::    %push-subscribe   -- store a subscription
 ::    %push-unsubscribe -- remove a subscription
 ::    %push-set-tags    -- update tags on a subscription
+::    %push-debug       -- set debug tracing on/off (loobean, owner only)
 ::
 ::  The inner agent manages subscriptions by poking itself:
 ::
@@ -91,12 +92,13 @@
   |=  =agent:gall
   ^-  agent:gall
   =|  pstate=pusher-state
+  =|  dbug=_|
   =/  push-base=path  (snoc base '~web-pusher')
   !.
   |_  =bowl:gall
   +*  this  .
       ag    ~(. agent bowl)
-      hep   ~(. helper bowl pstate)
+      hep   ~(. helper bowl pstate dbug)
   ::
   ++  on-init
     ^-  (quip card:agent:gall agent:gall)
@@ -176,6 +178,13 @@
       ?~  ts  `this
       =.  subs.pstate
         (~(put by subs.pstate) who.ps (~(put by inner) id.ps u.ts(tags tags.ps)))
+      `this
+    ::  push-debug: toggle debug tracing
+    ::
+    ?:  ?=(%push-debug mark)
+      ?>  =(our src):bowl
+      =.  dbug  !<(? vase)
+      ~&  [%web-pusher ?:(dbug %tracing-on %tracing-off)]
       `this
     ::
     ?.  ?=(%handle-http-request mark)
@@ -274,7 +283,7 @@
   --
 ::
 ++  helper
-  |_  [=bowl:gall pstate=pusher-state]
+  |_  [=bowl:gall pstate=pusher-state dbug=?]
   ::
   ++  vapid-pub-b64
     ^-  @t
@@ -315,11 +324,13 @@
       ?.  =(~ (~(int in tags.ts) tags.push-send))
         `[ship id sub.ts]
       ~
+    ~?  dbug  [%web-pusher %sending (lent trips) %notifications]
     =/  cards=(list card:agent:gall)  ~
     |-
     ?~  trips
       [(flop cards) pstate]
     =/  [=ship id=@ta sub=subscription]  i.trips
+    ~?  dbug  [%web-pusher %push-to ship id]
     =/  req=request:http
       (send-notification:web-push sub u.config.pstate payload exp eny.bowl)
     %=  $
@@ -342,11 +353,16 @@
     ?:  |(=(410 status) =(404 status))
       ::  remove the dead subscription
       ::
+      ~?  dbug  [%web-pusher %removing-dead-sub ship sid status]
       =/  inner=(map @ta tagged-sub)  (~(gut by subs.pstate) ship ~)
       =/  new-inner  (~(del by inner) sid)
       ?:  =(~ new-inner)
         `pstate(subs (~(del by subs.pstate) ship))
       `pstate(subs (~(put by subs.pstate) ship new-inner))
+    ?:  =(201 status)
+      ~?  dbug  [%web-pusher %delivered ship sid]
+      `pstate
+    ~?  dbug  [%web-pusher %send-failed ship sid status]
     `pstate
   ::
   ++  debug-page

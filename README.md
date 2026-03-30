@@ -136,6 +136,23 @@ Your inner agent handles browser-facing HTTP (parsing subscription JSON, authent
 [%pass /push/send %agent [our dap]:bowl %poke %push-send !>(some-push-send)]
 ```
 
+## Debug tracing
+
+The wrapper supports a debug tracing mode that prints send and delivery information to the dojo. Toggle it by poking `%push-debug`:
+
+```hoon
+[%pass /push/dbug %agent [our dap]:bowl %poke %push-debug !>(&)]
+```
+
+When enabled, the dojo will show:
+- `[%web-pusher %sending N %notifications]` — number of subscriptions being sent to
+- `[%web-pusher %push-to ~ship id]` — each individual send
+- `[%web-pusher %delivered ~ship id]` — successful delivery (HTTP 201)
+- `[%web-pusher %send-failed ~ship id status]` — failed delivery
+- `[%web-pusher %removing-dead-sub ~ship id status]` — subscription removed (HTTP 410/404)
+
+Tracing is off by default and resets on agent reload.
+
 ## Wrapper scries
 
 The wrapper exposes peeks under `/web-pusher`:
